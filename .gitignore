@@ -1,0 +1,10 @@
+bochs/
+build/
+*.output
+*.o
+*.d
+*.txt
+!src/tests/**/*.txt
+src/examples/**/*
+src/examples/**/*.a
+*.swp
