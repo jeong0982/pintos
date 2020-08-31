@@ -118,6 +118,7 @@ tid_t thread_create (const char *name, int priority, thread_func *, void *);
 
 void thread_block (void);
 void thread_unblock (struct thread *);
+void thread_put_sorted (struct list *list, struct list_elem *elem);
 
 void thread_sleep (int64_t ticks);
 void thread_awake (int64_t ticks);
@@ -141,7 +142,7 @@ int thread_get_priority (void);
 void thread_set_priority (int);
 
 void test_max_priority (void);
-bool cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+/* bool cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED); */
 
 int thread_get_nice (void);
 void thread_set_nice (int);

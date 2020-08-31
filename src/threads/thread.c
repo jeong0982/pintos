@@ -243,9 +243,25 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+  thread_put_sorted (&ready_list, &t->elem);
   t->status = THREAD_READY;
   intr_set_level (old_level);
+}
+
+void thread_put_sorted (struct list *list, struct list_elem *elem) {
+  struct list_elem *e;
+  struct thread *to_put = list_entry (elem, struct thread, elem);
+  if (!list_empty(list)) {
+    for (e = list_begin (list); e != list_end (list); e = list_next (e)) {
+      struct thread *t = list_entry (e, struct thread, elem);
+      int iter_priority = t -> priority;
+      if (iter_priority <= to_put -> priority) {
+        list_insert(e, elem);
+        return;
+      }
+    }
+  }
+  list_push_back (list, elem);
 }
 
 void thread_sleep (int64_t ticks) {
@@ -355,7 +371,7 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+    thread_put_sorted (&ready_list, &cur->elem);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -383,6 +399,11 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
+  if (!list_empty (&ready_list)) {
+    if (new_priority < list_entry(list_begin (&ready_list), struct thread, elem) -> priority) {
+      thread_yield ();
+    }
+  }
 }
 
 /* Returns the current thread's priority. */
@@ -390,6 +411,17 @@ int
 thread_get_priority (void) 
 {
   return thread_current ()->priority;
+}
+
+void test_max_priority (void) {
+  struct list_elem *e;
+  if (list_empty(&ready_list)){
+    e = list_begin (&ready_list);
+    struct thread *head = list_entry (e, struct thread, elem);
+    if (head -> priority > thread_current () -> priority) {
+      thread_yield ();
+    }
+  }
 }
 
 /* Sets the current thread's nice value to NICE. */
