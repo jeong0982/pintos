@@ -248,20 +248,22 @@ thread_unblock (struct thread *t)
   intr_set_level (old_level);
 }
 
-void thread_put_sorted (struct list *list, struct list_elem *elem) {
+void thread_put_sorted (struct list *list, struct list_elem *element) {
   struct list_elem *e;
-  struct thread *to_put = list_entry (elem, struct thread, elem);
+
+  struct thread *to_put = list_entry (element, struct thread, elem);
+
   if (!list_empty(list)) {
     for (e = list_begin (list); e != list_end (list); e = list_next (e)) {
       struct thread *t = list_entry (e, struct thread, elem);
       int iter_priority = t -> priority;
-      if (iter_priority <= to_put -> priority) {
-        list_insert(e, elem);
+      if (to_put -> priority > iter_priority) {
+        list_insert(e, element);
         return;
       }
     }
   }
-  list_push_back (list, elem);
+  list_push_back (list, element);
 }
 
 void thread_sleep (int64_t ticks) {
