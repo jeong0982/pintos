@@ -142,6 +142,7 @@ int thread_get_priority (void);
 void thread_set_priority (int);
 
 void test_max_priority (void);
+bool thread_priority_compare (const struct list_elem* left, const struct list_elem *right, void *aux);
 
 int thread_get_nice (void);
 void thread_set_nice (int);

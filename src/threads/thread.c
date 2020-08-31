@@ -426,6 +426,12 @@ void test_max_priority (void) {
   }
 }
 
+bool thread_priority_compare (const struct list_elem *left, const struct list_elem *right, void *aux UNUSED) {
+  struct thread *thread_left = list_entry(left, struct thread, elem);
+  struct thread *thread_right = list_entry(right, struct thread, elem);
+  return thread_left->priority > thread_right->priority;
+}
+
 /* Sets the current thread's nice value to NICE. */
 void
 thread_set_nice (int nice UNUSED) 
