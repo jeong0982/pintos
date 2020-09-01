@@ -88,10 +88,14 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
+    int init_priority;                  /* thread가 만들어질 때의 priority */
     struct list_elem allelem;           /* List element for all threads list. */
     int64_t wakeup_tick;
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+    struct lock *wait_on_lock;          /* 현재 기다리고 있는 lock */
+    struct list donations;              /* 현재 thread가 priority를 donate 받은 thread들의 list */
+    struct list_elem donation_elem;     /* 현재 thread가 priority를 donate 할 때 list에 들어가기 위한 elem */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -141,8 +145,13 @@ void thread_foreach (thread_action_func *, void *);
 int thread_get_priority (void);
 void thread_set_priority (int);
 
+void donate_priority (void);
+void remove_with_lock (struct lock *lock);
+void refresh_priority (void);
+
 void test_max_priority (void);
 bool thread_priority_compare (const struct list_elem* left, const struct list_elem *right, void *aux);
+bool thread_priority_compare_donation (const struct list_elem *left, const struct list_elem *right, void *aux);
 
 int thread_get_nice (void);
 void thread_set_nice (int);
