@@ -31,6 +31,10 @@ process_execute (const char *file_name)
   char *fn_copy;
   tid_t tid;
 
+  char **saveptr;
+  char *token;
+  file_name = strtok_r (file_name, " ", saveptr);
+
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
@@ -54,6 +58,22 @@ start_process (void *file_name_)
   struct intr_frame if_;
   bool success;
 
+  char **tokens;
+  char **saveptr;
+  char *token;
+  int index = 0;
+  int count;
+
+  token = strtok_r (file_name, " ", saveptr);
+  strlcpy (file_name, token, PGSIZE);     // 이거 되냐?
+
+  while(token) {
+    tokens[index++] = strtok_r (file_name, " ", saveptr);
+  }
+  tokens[index] = NULL;
+  count = index;
+
+    
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
@@ -61,10 +81,21 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
 
+  int i, j;
+  for (i = count - 1; i > -1; i--) {
+    for (j = strlen(tokens[i]); j > -1; j--) {
+      if_.esp = if_.esp - 1;
+      ** (char **) &if_.esp  = tokens[i][j];    // 이거 & 맞냐
+    }
+  }
+
+
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
     thread_exit ();
+
+  hex_dump (if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -358,7 +389,7 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
      it then user code that passed a null pointer to system calls
      could quite likely panic the kernel by way of null pointer
      assertions in memcpy(), etc. */
-  if (phdr->p_vaddr < PGSIZE)
+  if (phdr->p_offset < PGSIZE)
     return false;
 
   /* It's okay. */
