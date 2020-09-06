@@ -31,9 +31,14 @@ process_execute (const char *file_name)
   char *fn_copy;
   tid_t tid;
 
-  char **saveptr;
+  char *saveptr;
   char *token;
-  file_name = strtok_r (file_name, " ", saveptr);
+  const char *file_name_usr;
+  char *file_name_copy = NULL;
+  file_name_copy = palloc_get_page (0);
+  strlcpy (file_name_copy, file_name, PGSIZE);
+
+  file_name_usr = strtok_r (file_name_copy, " ", &saveptr);
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -43,7 +48,7 @@ process_execute (const char *file_name)
   strlcpy (fn_copy, file_name, PGSIZE);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (file_name_usr, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -58,22 +63,26 @@ start_process (void *file_name_)
   struct intr_frame if_;
   bool success;
 
-  char **tokens;
-  char **saveptr;
+  const char **tokens = (const char**) palloc_get_page(0);
+  char *saveptr;
   char *token;
   int index = 0;
   int count;
 
-  token = strtok_r (file_name, " ", saveptr);
-  strlcpy (file_name, token, PGSIZE);     // 이거 되냐?
+  token = strtok_r (file_name, " ", &saveptr);
+  tokens[index++] = token;
+  strlcpy (file_name, token, strlen (token) + 1);     // 이거 되냐?
 
-  while(token) {
-    tokens[index++] = strtok_r (file_name, " ", saveptr);
+  while(token != NULL) {
+    token = strtok_r (NULL, " ", &saveptr);
+    tokens[index++] = token;
   }
-  tokens[index] = NULL;
-  count = index;
+  // tokens[index] = 0;
+  count = index - 1;
 
-    
+  // 이제 tokens에 모든 것들이 다 저장되었다
+  void* argv_addr[count]; // 각각 스트링들의 주소를 저장
+
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
@@ -81,14 +90,42 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
 
-  int i, j;
+/*___________일단 실제 단어부터 넣어버림_____________________________________________________*/
+  int i, j, len = 0;
   for (i = count - 1; i > -1; i--) {
-    for (j = strlen(tokens[i]); j > -1; j--) {
+    for (j = strlen(tokens[i]); j > -1; j--) { // 여기서 NULL부터 시작하는건가?
       if_.esp = if_.esp - 1;
       ** (char **) &if_.esp  = tokens[i][j];    // 이거 & 맞냐
+      // memcpy(if_.esp, tokens[i][j], 1);
     }
+    argv_addr[i] = if_.esp; // 방금 넣은 스트링의 주소를 저장
   }
 
+/*__________________이제 4의 배수로 내림을 해버린다________________________________________*/
+  if_.esp = (void*) ( (unsigned int) (if_.esp) & 0xfffffffc);
+
+/*___각 스트링들의 주소를 가리키는 포인터를 counter 개 삽입하기 전에 마지막에 NULL을 넣어준다___*/
+  if_.esp -= 4;
+  *((uint32_t*) if_.esp) = 0;
+
+/*___________이제 스택에 주소들을 포인터로 넣어주자_______________________________________*/
+  for (i = count - 1; i > -1; i--) {
+    if_.esp -= 4;
+    *((void**) if_.esp) = argv_addr[i];
+  }
+/*__________________그 다음 더블 포인터를 넣어준다__________________________________*/
+  if_.esp -= 4;
+  *((void**) if_.esp) = (if_.esp + 4); // 줄이기 전에 것이 2차원 배열의 시작
+
+/*_________________ 맨 아래에서 두번째에는 count를 넣어주자________________________________________*/
+  if_.esp -= 4;
+  *((int*) if_.esp) = count;
+
+/*_________________ 맨 위에 return addr________________________________________*/
+  if_.esp -= 4;
+  *((int*) if_.esp) = 0;
+
+  palloc_free_page (tokens);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
@@ -389,7 +426,7 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
      it then user code that passed a null pointer to system calls
      could quite likely panic the kernel by way of null pointer
      assertions in memcpy(), etc. */
-  if (phdr->p_offset < PGSIZE)
+  if (phdr->p_vaddr < PGSIZE)
     return false;
 
   /* It's okay. */
