@@ -77,7 +77,7 @@ start_process (void *file_name_)
     token = strtok_r (NULL, " ", &saveptr);
     tokens[index++] = token;
   }
-  // tokens[index] = 0;
+
   count = index - 1;
 
   // 이제 tokens에 모든 것들이 다 저장되었다
