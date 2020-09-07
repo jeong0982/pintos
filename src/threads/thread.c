@@ -181,6 +181,7 @@ thread_create (const char *name, int priority,
   t = palloc_get_page (PAL_ZERO);
   if (t == NULL)
     return TID_ERROR;
+
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
@@ -199,6 +200,12 @@ thread_create (const char *name, int priority,
   sf = alloc_frame (t, sizeof *sf);
   sf->eip = switch_entry;
   sf->ebp = 0;
+  
+  t->tid_parent = thread_tid(); // 이거 맞냐?
+  
+  sema_init(&t->wait_sema, 0);
+  sema_init(&t->load_sema, 0);
+  list_push_back(&thread_current()->children, &t->child_elem);
   
   /* Add to run queue. */
   thread_unblock (t);
@@ -610,6 +617,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->wait_on_lock = NULL;
   list_init (&t->donations);
   t->magic = THREAD_MAGIC;
+
+  list_init (&t->children);
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
