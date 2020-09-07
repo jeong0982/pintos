@@ -216,6 +216,22 @@ thread_create (const char *name, int priority,
   return tid;
 }
 
+struct thread *get_child_process (int pid) {
+  struct list *children = &thread_current () -> children;
+  struct list_elem *e;
+  for (e = list_begin (children); e != list_end (children); e = list_next (e)) {
+    struct thread *t = list_entry (e, struct thread, child_elem);
+    if (t ->tid == pid) {
+      return t;
+    }
+  }
+  return NULL;
+}
+
+void remove_child_process (struct thread *cp) {
+  list_remove (&cp ->child_elem);
+}
+
 /* Puts the current thread to sleep.  It will not be scheduled
    again until awoken by thread_unblock().
 
