@@ -106,6 +106,7 @@ struct thread
     struct semaphore wait_sema;          /* Synch for process_wait */
     struct semaphore load_sema;          /* Synch for exec */
     int exit_status;                     /* Store own exit status */
+    int is_done;                         /* 종료 유무 */
 
 
 #ifdef USERPROG
@@ -130,6 +131,8 @@ void thread_print_stats (void);
 
 typedef void thread_func (void *aux);
 tid_t thread_create (const char *name, int priority, thread_func *, void *);
+struct thread *get_child_process (int);
+void remove_child_process (struct thread *);
 
 void thread_block (void);
 void thread_unblock (struct thread *);

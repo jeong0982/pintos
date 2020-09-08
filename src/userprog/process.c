@@ -89,6 +89,10 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
+  if (!success) {
+    thread_current () -> exit_status = -1;
+  }
+  sema_up (&thread_current () ->load_sema);
 
 /*___________일단 실제 단어부터 넣어버림_____________________________________________________*/
   int i, j, len = 0;
@@ -129,10 +133,12 @@ start_process (void *file_name_)
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
-  if (!success) 
+  if (!success) {
+    thread_current () ->is_done = 0;
     thread_exit ();
-
-  hex_dump (if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
+  }
+  thread_current () ->is_done = 1;
+  // hex_dump (if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -156,7 +162,13 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  return -1;
+  struct thread *child = get_child_process(child_tid);
+  if (child == NULL) {
+    return -1;
+  }
+  sema_down (&child -> wait_sema);
+  remove_child_process (child);
+  return child-> exit_status;
 }
 
 /* Free the current process's resources. */
@@ -362,7 +374,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
               if (!load_segment (file, file_page, (void *) mem_page,
                                  read_bytes, zero_bytes, writable))
                 goto done;
-            }
+              }
           else
             goto done;
           break;
