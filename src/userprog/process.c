@@ -150,6 +150,28 @@ start_process (void *file_name_)
   NOT_REACHED ();
 }
 
+int process_add_file (struct file *f) {
+  struct thread *cur = thread_current ();
+  int new_file_index = cur->file_no;
+  cur ->fd[new_file_index] = f;
+  cur ->file_no += 1;
+  return new_file_index;
+}
+
+struct file *process_get_file (int fd) {
+  struct thread *cur = thread_current ();
+  return cur -> fd[fd];
+}
+
+void process_close_file (int fd) {
+  struct thread *cur = thread_current ();
+  
+  if (!(cur ->fd[fd] == NULL)) {
+    file_close (cur ->fd[fd]);
+  }
+  cur ->fd[fd] = NULL;
+}
+
 /* Waits for thread TID to die and returns its exit status.  If
    it was terminated by the kernel (i.e. killed due to an
    exception), returns -1.  If TID is invalid or if it was not a
@@ -177,7 +199,11 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
-
+  for (int i = 0; i < 128; i++) {
+    cur ->fd[i] = NULL;                // 2?
+  }
+  // file_allow_write (cur ->file_running);
+  // file_close (cur ->file_running);
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
@@ -388,6 +414,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
 
+  // file_deny_write (file);
+  // thread_current () ->file_running = file;
   success = true;
 
  done:
