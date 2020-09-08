@@ -202,8 +202,7 @@ process_exit (void)
   for (int i = 0; i < 128; i++) {
     cur ->fd[i] = NULL;                // 2?
   }
-  // file_allow_write (cur ->file_running);
-  // file_close (cur ->file_running);
+
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
@@ -414,8 +413,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
 
-  // file_deny_write (file);
-  // thread_current () ->file_running = file;
   success = true;
 
  done:

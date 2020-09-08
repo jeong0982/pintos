@@ -158,6 +158,9 @@ void exit (int status) {
     status = -1;
   }
   cur ->exit_status = status;
+  for (int i = 0; i < 128; i++) {
+    file_close(cur ->fd[i]);
+  }
   printf("%s: exit(%d)\n", cur->name, status); 
   thread_exit ();
 }
@@ -195,10 +198,13 @@ int wait (tid_t tid) {
 
 int open (const char *file) {
   struct thread *cur = thread_current ();
+  check_address (file);
   if (file == NULL) {
     return -1;
   }
   struct file *f = filesys_open (file);
+  if (strcmp (thread_name(), file) == 0)
+    file_deny_write (f);
   if (f == NULL) {
     return -1;
   }
