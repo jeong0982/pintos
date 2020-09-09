@@ -33,7 +33,7 @@ process_execute (const char *file_name)
 
   char *saveptr;
   char *token;
-  const char *file_name_usr;
+  const char *file_name_usr = NULL;
   char *file_name_copy = NULL;
   file_name_copy = palloc_get_page (0);
   strlcpy (file_name_copy, file_name, PGSIZE);
@@ -43,14 +43,23 @@ process_execute (const char *file_name)
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
-  if (fn_copy == NULL)
+  if (fn_copy == NULL) {
+    if (file_name_copy) {
+      palloc_free_page (file_name_copy);
+    }
     return TID_ERROR;
+  }
   strlcpy (fn_copy, file_name, PGSIZE);
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name_usr, PRI_DEFAULT, start_process, fn_copy);
-  if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
+  struct list_elem *e;
+
+  if (file_name_copy) palloc_free_page (file_name_copy);
+  // if (file_name_usr) palloc_free_page (file_name_usr);
+  if (tid == TID_ERROR) {
+    if (fn_copy) palloc_free_page (fn_copy);
+  }
   return tid;
 }
 
@@ -134,11 +143,10 @@ start_process (void *file_name_)
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) {
-    thread_current () ->is_done = 0;
+    thread_current () ->load_success = 0;
     thread_exit ();
   }
-  thread_current () ->is_done = 1;
-  // hex_dump (if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
+  thread_current () ->load_success = 1;
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -182,15 +190,19 @@ void process_close_file (int fd) {
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid) 
 {
   struct thread *child = get_child_process(child_tid);
   if (child == NULL) {
     return -1;
   }
   sema_down (&child -> wait_sema);
+  if (child ->is_done != 1) {
+    return -1;
+  }
+  int status = child ->exit_status;
   remove_child_process (child);
-  return child-> exit_status;
+  return status;
 }
 
 /* Free the current process's resources. */
@@ -199,10 +211,24 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
-  for (int i = 0; i < 128; i++) {
+  for (int i = 2; i < 128; i++) {
+    if (cur ->fd[i] != NULL) {
+      file_close(cur ->fd[i]);
+    }
     cur ->fd[i] = NULL;                // 2?
   }
 
+  struct list_elem *e;
+  struct list *child_list = &cur ->children;
+  while (!list_empty (child_list)) {
+    e = list_pop_front (child_list);
+    struct thread *t = list_entry (e, struct thread, child_elem);
+    if (t -> is_done) {
+      palloc_free_page (t);
+    } else {
+      process_wait (t ->tid);
+    }
+  }
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;

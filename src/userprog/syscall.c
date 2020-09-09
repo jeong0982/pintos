@@ -75,19 +75,19 @@ syscall_handler (struct intr_frame *f UNUSED)
       break;
     }
     case SYS_EXIT: {
-      get_argument (f->esp, arg, 1); //Exit을 위한 argument는 하나
+      get_argument (sp, arg, 1); //Exit을 위한 argument는 하나
       exit(arg[0]);
       break;
     }
     case SYS_EXEC: {
       get_argument (sp, arg, 1);
-      check_address ((void *) arg[0]);
+      // check_address ((void *) arg[0]);
       f -> eax = exec ((const char *) arg[0]);
       break;
     }
     case SYS_WAIT: {
       get_argument (sp, arg, 1);
-      f-> eax = wait((tid_t)arg[0]);
+      f-> eax = (uint32_t) wait((tid_t)arg[0]);
       break;
     }
     case SYS_CREATE: {
@@ -154,13 +154,21 @@ void halt(void) {
 
 void exit (int status) {
   struct thread *cur = thread_current ();
-  if (status < 0) {
-    status = -1;
-  }
+  struct list *children = &thread_current () -> children;
+  struct list_elem *e;
+
+  // if (status < 0) {
+  //   status = -1;
+  // }
+
   cur ->exit_status = status;
-  for (int i = 0; i < 128; i++) {
-    file_close(cur ->fd[i]);
-  }
+  // for (int i = 0; i < 128; i++) {
+  //   file_close(cur ->fd[i]);
+  // }
+  // for (e = list_begin (children); e != list_end (children); e = list_next (e)) {
+  //   struct thread *t = list_entry (e, struct thread, child_elem);
+  //   process_wait(t ->tid);
+  // }
   printf("%s: exit(%d)\n", cur->name, status); 
   thread_exit ();
 }
@@ -169,13 +177,15 @@ tid_t exec (const char *cmd_line) {
   tid_t tid = process_execute (cmd_line);
   struct thread *child = get_child_process (tid);
   struct thread *cur = thread_current ();
+  if (child == NULL) {
+    return -1;
+  }
   sema_down (&child ->load_sema);
-  if (child-> is_done) {
+  if (child-> load_success) {
     return tid;
   } else {
     return -1;
   }
-  // return process_execute(cmd_line);
 }
 
 bool create (const char *file, unsigned initial_size) {
@@ -265,6 +275,5 @@ unsigned tell (int fd) {
 }
 
 void close (int fd) {
-  process_close_file (fd);
-  return file_close(thread_current()->fd[fd]);
+  return process_close_file (fd);
 }

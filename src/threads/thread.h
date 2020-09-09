@@ -100,18 +100,19 @@ struct thread
     struct list donations;              /* 현재 thread가 priority를 donate 받은 thread들의 list */
     struct list_elem donation_elem;     /* 현재 thread가 priority를 donate 할 때 list에 들어가기 위한 elem */
     /* For process hierarchy */
-    tid_t tid_parent;                    /* 부모 프로세스의 디스크립터 */
+    struct thread* parent;               /* 부모 프로세스의 디스크립터 */
     struct list_elem child_elem;         /* 부모의 리스트의 자식 리스트에 들어갈 element */
     struct list children;                /* 자식 리스트 */
     struct semaphore wait_sema;          /* Synch for process_wait */
     struct semaphore load_sema;          /* Synch for exec */
     int exit_status;                     /* Store own exit status */
+    bool load_success;                   /* load 성공 여부 */
     int is_done;                         /* 종료 유무 */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-    struct file* fd[128];
+    struct file* fd[200];
     int file_no;                        /* Number of file */
     struct file* file_running;
 #endif

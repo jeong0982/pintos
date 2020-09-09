@@ -201,10 +201,13 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
   
-  t->tid_parent = thread_tid(); // 이거 맞냐?
+  t->parent = running_thread(); // 이거 맞냐?
   
+  t->is_done = 0;
+  t->load_success = 0;
   sema_init(&t->wait_sema, 0);
   sema_init(&t->load_sema, 0);
+  list_init (&(t->children));
   list_push_back(&thread_current()->children, &t->child_elem);
   
   /* Add to run queue. */
@@ -230,6 +233,7 @@ struct thread *get_child_process (int pid) {
 
 void remove_child_process (struct thread *cp) {
   list_remove (&cp ->child_elem);
+  palloc_free_page (cp);
 }
 
 /* Puts the current thread to sleep.  It will not be scheduled
@@ -378,7 +382,10 @@ thread_exit (void)
      when it calls thread_schedule_tail(). */
   intr_disable ();
   list_remove (&thread_current()->allelem);
+
+  thread_current ()->is_done = 1;
   sema_up (&thread_current() ->wait_sema);
+  
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
