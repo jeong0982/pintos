@@ -67,7 +67,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   uint32_t *sp = f -> esp;
   check_address ((void*) sp);
   // printf("syscall : %d\n", *(uint32_t *)(f->esp));
-  // hex_dump(f->esp, f->esp, PHYS_BASE - f->esp, 1); 
+  hex_dump(f->esp, f->esp, PHYS_BASE - f->esp, 1); 
   switch (*(uint32_t *)(f->esp)) {
     case SYS_HALT: {
       halt ();
@@ -105,8 +105,12 @@ syscall_handler (struct intr_frame *f UNUSED)
       break;
     }
     case SYS_OPEN: {
+      
       get_argument (sp, arg, 1);
-      f ->eax = open ((const char*) arg[0]);
+      int return_code = open ((const char*) arg[0]);
+      // if (return_code == -1) {
+        printf ("%d : open\n", return_code);
+      // }
       break;
     }
     case SYS_FILESIZE: {
@@ -208,13 +212,16 @@ int wait (tid_t tid) {
 
 int open (const char *file) {
   struct thread *cur = thread_current ();
+  printf ("%d",*(int *)file);
+  printf ("\n");
   check_address (file);
   if (file == NULL) {
     return -1;
   }
   struct file *f = filesys_open (file);
-  if (strcmp (thread_name(), file) == 0)
+  if (strcmp (thread_name(), file) == 0) {
     file_deny_write (f);
+  }
   if (f == NULL) {
     return -1;
   }

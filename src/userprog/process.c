@@ -163,7 +163,8 @@ int process_add_file (struct file *f) {
   int new_file_index = cur->file_no;
   cur ->fd[new_file_index] = f;
   cur ->file_no += 1;
-  return new_file_index;
+  printf ("%d : fd\n", new_file_index + 1);
+  return new_file_index + 1;
 }
 
 struct file *process_get_file (int fd) {
