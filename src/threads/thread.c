@@ -207,6 +207,7 @@ thread_create (const char *name, int priority,
   t->load_success = 0;
   sema_init(&t->wait_sema, 0);
   sema_init(&t->load_sema, 0);
+  sema_init(&t->meml_sema, 0);
   list_init (&(t->children));
   list_push_back(&thread_current()->children, &t->child_elem);
   

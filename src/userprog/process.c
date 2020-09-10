@@ -8,6 +8,7 @@
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
+#include "userprog/syscall.h"
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
@@ -31,8 +32,7 @@ process_execute (const char *file_name)
   char *fn_copy;
   tid_t tid;
 
-  char *saveptr;
-  char *token;
+  char *saveptr = NULL;
   const char *file_name_usr = NULL;
   char *file_name_copy = NULL;
   file_name_copy = palloc_get_page (0);
@@ -53,8 +53,7 @@ process_execute (const char *file_name)
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name_usr, PRI_DEFAULT, start_process, fn_copy);
-  struct list_elem *e;
-
+  
   if (file_name_copy) palloc_free_page (file_name_copy);
   // if (file_name_usr) palloc_free_page (file_name_usr);
   if (tid == TID_ERROR) {
@@ -98,55 +97,55 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
-  if (!success) {
-    thread_current () -> exit_status = -1;
-  }
-  sema_up (&thread_current () ->load_sema);
-
-/*___________일단 실제 단어부터 넣어버림_____________________________________________________*/
-  int i, j, len = 0;
-  for (i = count - 1; i > -1; i--) {
-    for (j = strlen(tokens[i]); j > -1; j--) { // 여기서 NULL부터 시작하는건가?
-      if_.esp = if_.esp - 1;
-      ** (char **) &if_.esp  = tokens[i][j];    // 이거 & 맞냐
-      // memcpy(if_.esp, tokens[i][j], 1);
+  if (success) {
+  /*___________일단 실제 단어부터 넣어버림_____________________________________________________*/
+    int i, j, len = 0;
+    for (i = count - 1; i > -1; i--) {
+      for (j = strlen(tokens[i]); j > -1; j--) { // 여기서 NULL부터 시작하는건가?
+        if_.esp = if_.esp - 1;
+        ** (char **) &if_.esp  = tokens[i][j];    // 이거 & 맞냐
+        // memcpy(if_.esp, tokens[i][j], 1);
+      }
+      argv_addr[i] = if_.esp; // 방금 넣은 스트링의 주소를 저장
     }
-    argv_addr[i] = if_.esp; // 방금 넣은 스트링의 주소를 저장
-  }
 
-/*__________________이제 4의 배수로 내림을 해버린다________________________________________*/
-  if_.esp = (void*) ( (unsigned int) (if_.esp) & 0xfffffffc);
+  /*__________________이제 4의 배수로 내림을 해버린다________________________________________*/
+    if_.esp = (void*) ( (unsigned int) (if_.esp) & 0xfffffffc);
 
-/*___각 스트링들의 주소를 가리키는 포인터를 counter 개 삽입하기 전에 마지막에 NULL을 넣어준다___*/
-  if_.esp -= 4;
-  *((uint32_t*) if_.esp) = 0;
-
-/*___________이제 스택에 주소들을 포인터로 넣어주자_______________________________________*/
-  for (i = count - 1; i > -1; i--) {
+  /*___각 스트링들의 주소를 가리키는 포인터를 counter 개 삽입하기 전에 마지막에 NULL을 넣어준다___*/
     if_.esp -= 4;
-    *((void**) if_.esp) = argv_addr[i];
+    *((uint32_t*) if_.esp) = 0;
+
+  /*___________이제 스택에 주소들을 포인터로 넣어주자_______________________________________*/
+    for (i = count - 1; i > -1; i--) {
+      if_.esp -= 4;
+      *((void**) if_.esp) = argv_addr[i];
+    }
+  /*__________________그 다음 더블 포인터를 넣어준다__________________________________*/
+    if_.esp -= 4;
+    *((void**) if_.esp) = (if_.esp + 4); // 줄이기 전에 것이 2차원 배열의 시작
+
+  /*_________________ 맨 아래에서 두번째에는 count를 넣어주자________________________________________*/
+    if_.esp -= 4;
+    *((int*) if_.esp) = count;
+
+  /*_________________ 맨 위에 return addr________________________________________*/
+    if_.esp -= 4;
+    *((int*) if_.esp) = 0;
   }
-/*__________________그 다음 더블 포인터를 넣어준다__________________________________*/
-  if_.esp -= 4;
-  *((void**) if_.esp) = (if_.esp + 4); // 줄이기 전에 것이 2차원 배열의 시작
-
-/*_________________ 맨 아래에서 두번째에는 count를 넣어주자________________________________________*/
-  if_.esp -= 4;
-  *((int*) if_.esp) = count;
-
-/*_________________ 맨 위에 return addr________________________________________*/
-  if_.esp -= 4;
-  *((int*) if_.esp) = 0;
-
   palloc_free_page (tokens);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) {
     thread_current () ->load_success = 0;
-    thread_exit ();
+    sema_up (&thread_current () ->load_sema);
+    sema_down (&thread_current () -> meml_sema);
+    exit (-1);
   }
   thread_current () ->load_success = 1;
+  sema_up (&thread_current () ->load_sema);
+  sema_down (&thread_current () -> meml_sema);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -163,12 +162,13 @@ int process_add_file (struct file *f) {
   int new_file_index = cur->file_no;
   cur ->fd[new_file_index] = f;
   cur ->file_no += 1;
-  printf ("%d : fd\n", new_file_index + 1);
-  return new_file_index + 1;
+  // printf ("%d : fd\n", new_file_index);
+  return new_file_index;
 }
 
 struct file *process_get_file (int fd) {
   struct thread *cur = thread_current ();
+  // printf ("%d : fd\n", fd);
   return cur -> fd[fd];
 }
 
@@ -197,10 +197,11 @@ process_wait (tid_t child_tid)
   if (child == NULL) {
     return -1;
   }
+  sema_up (&child -> meml_sema);
   sema_down (&child -> wait_sema);
-  if (child ->is_done != 1) {
-    return -1;
-  }
+  // if (child ->is_done != 1) {
+  //   return -1;
+  // }
   int status = child ->exit_status;
   remove_child_process (child);
   return status;
@@ -212,26 +213,18 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
-  for (int i = 2; i < 128; i++) {
-    if (cur ->fd[i] != NULL) {
-      file_close(cur ->fd[i]);
-    }
-    cur ->fd[i] = NULL;                // 2?
-  }
-
+  printf ("%d : tid\n", cur -> tid);
   struct list_elem *e;
   struct list *child_list = &cur ->children;
   while (!list_empty (child_list)) {
-    e = list_pop_front (child_list);
+    e = list_begin (child_list);
     struct thread *t = list_entry (e, struct thread, child_elem);
-    if (t -> is_done) {
-      palloc_free_page (t);
-    } else {
-      process_wait (t ->tid);
-    }
+    printf ("dfdf\n");
+    process_wait (t ->tid);
   }
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
+  file_close (cur ->file_running);
   pd = cur->pagedir;
   if (pd != NULL) 
     {
@@ -352,15 +345,18 @@ load (const char *file_name, void (**eip) (void), void **esp)
   if (t->pagedir == NULL) 
     goto done;
   process_activate ();
-
+  lock_acquire (&filesys_lock);
   /* Open executable file. */
   file = filesys_open (file_name);
   if (file == NULL) 
     {
+      lock_release (&filesys_lock);
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
-
+  t ->file_running = file;
+  file_deny_write (file);
+  lock_release (&filesys_lock);
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
       || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)
@@ -444,7 +440,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
   return success;
 }
 
