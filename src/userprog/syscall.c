@@ -33,7 +33,7 @@ void close (int);
 
 /*_____부가적인 함수들_________________________________________________________________*/
 void check_address (void *addr) {
-  if (0x8048000 > addr || 0xc0000000 < addr) {
+  if (0x8048000 > addr || 0xc0000000 <= addr) {
     exit (-1);
   }
 }
@@ -66,28 +66,34 @@ syscall_handler (struct intr_frame *f UNUSED)
   int *arg = (int *) palloc_get_page (0);
   uint32_t *sp = f -> esp;
   check_address ((void*) sp);
-  // printf("syscall : %d\n", *(uint32_t *)(f->esp));
-  hex_dump(f->esp, f->esp, PHYS_BASE - f->esp, 1); 
+
   switch (*(uint32_t *)(f->esp)) {
     case SYS_HALT: {
+      palloc_free_page (arg);
       halt ();
       NOT_REACHED ();
       break;
     }
     case SYS_EXIT: {
       get_argument (sp, arg, 1); //Exit을 위한 argument는 하나
-      exit(arg[0]);
+      int status = arg[0];
+      palloc_free_page (arg);
+      exit(status);
       break;
     }
     case SYS_EXEC: {
       get_argument (sp, arg, 1);
       // check_address ((void *) arg[0]);
-      f -> eax = exec ((const char *) arg[0]);
+      const char* prog = (const char *) arg[0];
+      palloc_free_page (arg);
+      f -> eax = exec (prog);
       break;
     }
     case SYS_WAIT: {
       get_argument (sp, arg, 1);
-      f-> eax = (uint32_t) wait((tid_t)arg[0]);
+      tid_t tid = arg[0];
+      palloc_free_page (arg);
+      f-> eax = (uint32_t) wait(tid);
       break;
     }
     case SYS_CREATE: {
@@ -95,6 +101,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       get_argument (sp, arg, 2);
       status = create((const char*) arg[0], arg[1]);
       f ->eax = status;
+      palloc_free_page (arg);
       break;
     }
     case SYS_REMOVE: {
@@ -102,6 +109,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       get_argument (sp, arg, 1);
       status = remove((const char*) arg[0]);
       f ->eax = status;
+      palloc_free_page (arg);
       break;
     }
     case SYS_OPEN: {
@@ -109,45 +117,53 @@ syscall_handler (struct intr_frame *f UNUSED)
       get_argument (sp, arg, 1);
       int return_code = open ((const char*) arg[0]);
       // if (return_code == -1) {
-        printf ("%d : open\n", return_code);
+      // printf ("%d : open\n", return_code);
       // }
+      palloc_free_page (arg);
+      f ->eax = return_code;
       break;
     }
     case SYS_FILESIZE: {
       get_argument (sp, arg, 1);
       f ->eax = filesize(arg[0]);
+      palloc_free_page (arg);
       break;
     }
     case SYS_SEEK: {
       get_argument (sp, arg, 2);
       seek (arg[0], arg[1]);
+      palloc_free_page (arg);
       break;
     }
     case SYS_TELL: {
       get_argument (sp, arg, 1);
       f ->eax = tell (arg[0]);
+      palloc_free_page (arg);
       break;
     }
     case SYS_CLOSE: {
       get_argument (sp, arg, 1);
       close (arg[0]);
+      palloc_free_page (arg);
       break;
     }
     case SYS_READ: {
       get_argument (sp, arg, 3);
       f->eax = read(arg[0], (void *) arg[1], arg[2]);
+      palloc_free_page (arg);
       break;
     }
     case SYS_WRITE: {
       get_argument (sp, arg, 3);
       f ->eax = write(arg[0], (void *) arg[1], arg[2]);
+      palloc_free_page (arg);
       break;
     }
 
     default:
+      palloc_free_page (arg);
       exit (-1);
   }
-  palloc_free_page (arg);
   // thread_exit ();
 }
 
@@ -173,11 +189,13 @@ void exit (int status) {
   //   struct thread *t = list_entry (e, struct thread, child_elem);
   //   process_wait(t ->tid);
   // }
-  printf("%s: exit(%d)\n", cur->name, status); 
+  printf("%s: exit(%d)\n", cur->name, status);
   thread_exit ();
 }
 
 tid_t exec (const char *cmd_line) {
+  // printf (cmd_line);
+  // printf ("\n");
   tid_t tid = process_execute (cmd_line);
   struct thread *child = get_child_process (tid);
   struct thread *cur = thread_current ();
@@ -188,6 +206,9 @@ tid_t exec (const char *cmd_line) {
   if (child-> load_success) {
     return tid;
   } else {
+    // printf ("%d load failed\n", child ->tid);
+    // printf (cmd_line);
+    // printf ("\nexec returns -1\n");
     return -1;
   }
 }
@@ -212,8 +233,8 @@ int wait (tid_t tid) {
 
 int open (const char *file) {
   struct thread *cur = thread_current ();
-  printf ("%d",*(int *)file);
-  printf ("\n");
+  // printf (file);
+  // printf ("\n");
   check_address (file);
   if (file == NULL) {
     return -1;

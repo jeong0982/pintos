@@ -231,8 +231,16 @@ struct thread *get_child_process (int pid) {
   return NULL;
 }
 
+
 void remove_child_process (struct thread *cp) {
   list_remove (&cp ->child_elem);
+
+#ifdef USERPROG
+  for (int i = 2; i < 128; i++) {
+    file_close (cp ->fd[i]);
+  }
+#endif
+
   palloc_free_page (cp);
 }
 
