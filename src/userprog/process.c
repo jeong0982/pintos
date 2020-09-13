@@ -8,6 +8,7 @@
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
+#include "userprog/syscall.h"
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
@@ -55,7 +56,6 @@ process_execute (const char *file_name)
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name_usr, PRI_DEFAULT, start_process, fn_copy);
-
   if (file_name_copy) palloc_free_page (file_name_copy);
   if (tid == TID_ERROR) {
     if (fn_copy) palloc_free_page (fn_copy);
@@ -148,6 +148,8 @@ start_process (void *file_name_)
     exit (-1);
   }
   thread_current () ->load_success = 1;
+  sema_up (&thread_current () ->load_sema);
+  sema_down (&thread_current () -> meml_sema);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -169,6 +171,7 @@ int process_add_file (struct file *f) {
 
 struct file *process_get_file (int fd) {
   struct thread *cur = thread_current ();
+  // printf ("%d : fd\n", fd);
   return cur -> fd[fd];
 }
 
@@ -197,10 +200,11 @@ process_wait (tid_t child_tid)
   if (child == NULL) {
     return -1;
   }
+  sema_up (&child -> meml_sema);
   sema_down (&child -> wait_sema);
-  if (child ->is_done != 1) {
-    return -1;
-  }
+  // if (child ->is_done != 1) {
+  //   return -1;
+  // }
   int status = child ->exit_status;
   remove_child_process (child);
   return status;
@@ -222,12 +226,13 @@ process_exit (void)
   struct list_elem *e;
   struct list *child_list = &cur ->children;
   while (!list_empty (child_list)) {
-    e = list_pop_front (child_list);
+    e = list_begin (child_list);
     struct thread *t = list_entry (e, struct thread, child_elem);
     process_wait (t ->tid);
   }
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
+  file_close (cur ->file_running);
   pd = cur->pagedir;
   if (pd != NULL) 
     {
@@ -348,15 +353,18 @@ load (const char *file_name, void (**eip) (void), void **esp)
   if (t->pagedir == NULL) 
     goto done;
   process_activate ();
-
+  lock_acquire (&filesys_lock);
   /* Open executable file. */
   file = filesys_open (file_name);
   if (file == NULL) 
     {
+      lock_release (&filesys_lock);
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
-
+  t ->file_running = file;
+  file_deny_write (file);
+  lock_release (&filesys_lock);
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
       || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)
@@ -440,7 +448,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
   return success;
 }
 

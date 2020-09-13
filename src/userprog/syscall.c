@@ -33,7 +33,9 @@ void close (int);
 
 /*_____부가적인 함수들_________________________________________________________________*/
 void check_address (void *addr) {
-  if (0x8048000 > addr || 0xc0000000 <= addr) {
+  if (0xc0000000 <= addr) {
+    if (lock_held_by_current_thread(&filesys_lock))
+      lock_release (&filesys_lock);
     exit (-1);
   }
 }
@@ -66,7 +68,6 @@ syscall_handler (struct intr_frame *f UNUSED)
   int *arg = (int *) palloc_get_page (0);
   uint32_t *sp = f -> esp;
   check_address ((void*) sp);
-
   switch (*(uint32_t *)(f->esp)) {
     case SYS_HALT: {
       palloc_free_page (arg);
@@ -182,9 +183,9 @@ void exit (int status) {
   // }
 
   cur ->exit_status = status;
-  // for (int i = 0; i < 128; i++) {
-  //   file_close(cur ->fd[i]);
-  // }
+  for (int i = 2; i < 128; i++) {
+    file_close(cur ->fd[i]);
+  }
   // for (e = list_begin (children); e != list_end (children); e = list_next (e)) {
   //   struct thread *t = list_entry (e, struct thread, child_elem);
   //   process_wait(t ->tid);
@@ -197,12 +198,14 @@ tid_t exec (const char *cmd_line) {
   // printf (cmd_line);
   // printf ("\n");
   tid_t tid = process_execute (cmd_line);
-  struct thread *child = get_child_process (tid);
+
+    struct thread *child = get_child_process (tid);
   struct thread *cur = thread_current ();
   if (child == NULL) {
     return -1;
   }
   sema_down (&child ->load_sema);
+  
   if (child-> load_success) {
     return tid;
   } else {
@@ -228,6 +231,7 @@ bool remove (const char *file) {
 }
 
 int wait (tid_t tid) {
+  printf ("%d waits %d\n", thread_current () ->tid, tid);
   return process_wait(tid);
 }
 
@@ -237,16 +241,17 @@ int open (const char *file) {
   // printf ("\n");
   check_address (file);
   if (file == NULL) {
+    printf ("%d : tid, file char null", cur ->tid);
     return -1;
   }
+  
   struct file *f = filesys_open (file);
-  if (strcmp (thread_name(), file) == 0) {
-    file_deny_write (f);
-  }
   if (f == NULL) {
+    printf ("%d : tid, file null", cur ->tid);
     return -1;
   }
-  return process_add_file (f);
+  int status = process_add_file (f);
+  return status;
 }
 
 int filesize (int fd) {
