@@ -183,9 +183,9 @@ void exit (int status) {
   // }
 
   cur ->exit_status = status;
-  for (int i = 2; i < 128; i++) {
-    file_close(cur ->fd[i]);
-  }
+  // for (int i = 2; i < 128; i++) {
+  //   file_close(cur ->fd[i]);
+  // }
   // for (e = list_begin (children); e != list_end (children); e = list_next (e)) {
   //   struct thread *t = list_entry (e, struct thread, child_elem);
   //   process_wait(t ->tid);
@@ -231,7 +231,6 @@ bool remove (const char *file) {
 }
 
 int wait (tid_t tid) {
-  printf ("%d waits %d\n", thread_current () ->tid, tid);
   return process_wait(tid);
 }
 
@@ -241,13 +240,14 @@ int open (const char *file) {
   // printf ("\n");
   check_address (file);
   if (file == NULL) {
-    printf ("%d : tid, file char null", cur ->tid);
     return -1;
   }
   
   struct file *f = filesys_open (file);
+  if (strcmp (thread_name(), file) == 0) {
+    file_deny_write (f);
+  }
   if (f == NULL) {
-    printf ("%d : tid, file null", cur ->tid);
     return -1;
   }
   int status = process_add_file (f);

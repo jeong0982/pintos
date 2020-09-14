@@ -232,7 +232,7 @@ process_exit (void)
   }
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
-  file_close (cur ->file_running);
+  // file_close (cur ->file_running);
   pd = cur->pagedir;
   if (pd != NULL) 
     {
@@ -353,18 +353,15 @@ load (const char *file_name, void (**eip) (void), void **esp)
   if (t->pagedir == NULL) 
     goto done;
   process_activate ();
-  lock_acquire (&filesys_lock);
+
   /* Open executable file. */
   file = filesys_open (file_name);
   if (file == NULL) 
     {
-      lock_release (&filesys_lock);
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
-  t ->file_running = file;
-  file_deny_write (file);
-  lock_release (&filesys_lock);
+
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
       || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)
