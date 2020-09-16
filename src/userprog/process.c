@@ -8,6 +8,7 @@
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
+#include "userprog/syscall.h"
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
@@ -31,17 +32,34 @@ process_execute (const char *file_name)
   char *fn_copy;
   tid_t tid;
 
+  char *saveptr = NULL;
+  const char *file_name_usr = NULL;
+  char *file_name_copy = NULL;
+  file_name_copy = palloc_get_page (0);
+  if (file_name_copy == NULL) {
+    return TID_ERROR;
+  }
+  strlcpy (file_name_copy, file_name, PGSIZE);
+
+  file_name_usr = strtok_r (file_name_copy, " ", &saveptr);
+
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
-  if (fn_copy == NULL)
+  if (fn_copy == NULL) {
+    if (file_name_copy) {
+      palloc_free_page (file_name_copy);
+    }
     return TID_ERROR;
+  }
   strlcpy (fn_copy, file_name, PGSIZE);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
-  if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
+  tid = thread_create (file_name_usr, PRI_DEFAULT, start_process, fn_copy);
+  if (file_name_copy) palloc_free_page (file_name_copy);
+  if (tid == TID_ERROR) {
+    if (fn_copy) palloc_free_page (fn_copy);
+  }
   return tid;
 }
 
@@ -54,17 +72,84 @@ start_process (void *file_name_)
   struct intr_frame if_;
   bool success;
 
+  const char **tokens = (const char**) palloc_get_page(0);
+  if (tokens == NULL) {
+    palloc_free_page (file_name);
+    exit (-1);
+  }
+  char *saveptr;
+  char *token;
+  int index = 0;
+  int count;
+
+  token = strtok_r (file_name, " ", &saveptr);
+  tokens[index++] = token;
+  strlcpy (file_name, token, strlen (token) + 1);     // 이거 되냐?
+
+  while(token != NULL) {
+    token = strtok_r (NULL, " ", &saveptr);
+    tokens[index++] = token;
+  }
+
+  count = index - 1;
+
+  // 이제 tokens에 모든 것들이 다 저장되었다
+  void* argv_addr[count]; // 각각 스트링들의 주소를 저장
+
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
+  sema_up (&thread_current () ->load_sema);
+  if (success) {
+  /*___________일단 실제 단어부터 넣어버림_____________________________________________________*/
+    int i, j, len = 0;
+    for (i = count - 1; i > -1; i--) {
+      for (j = strlen(tokens[i]); j > -1; j--) { // 여기서 NULL부터 시작하는건가?
+        if_.esp = if_.esp - 1;
+        ** (char **) &if_.esp  = tokens[i][j];    // 이거 & 맞냐
+        // memcpy(if_.esp, tokens[i][j], 1);
+      }
+      argv_addr[i] = if_.esp; // 방금 넣은 스트링의 주소를 저장
+    }
+
+  /*__________________이제 4의 배수로 내림을 해버린다________________________________________*/
+    if_.esp = (void*) ( (unsigned int) (if_.esp) & 0xfffffffc);
+
+  /*___각 스트링들의 주소를 가리키는 포인터를 counter 개 삽입하기 전에 마지막에 NULL을 넣어준다___*/
+    if_.esp -= 4;
+    *((uint32_t*) if_.esp) = 0;
+
+  /*___________이제 스택에 주소들을 포인터로 넣어주자_______________________________________*/
+    for (i = count - 1; i > -1; i--) {
+      if_.esp -= 4;
+      *((void**) if_.esp) = argv_addr[i];
+    }
+  /*__________________그 다음 더블 포인터를 넣어준다__________________________________*/
+    if_.esp -= 4;
+    *((void**) if_.esp) = (if_.esp + 4); // 줄이기 전에 것이 2차원 배열의 시작
+
+  /*_________________ 맨 아래에서 두번째에는 count를 넣어주자________________________________________*/
+    if_.esp -= 4;
+    *((int*) if_.esp) = count;
+
+  /*_________________ 맨 위에 return addr________________________________________*/
+    if_.esp -= 4;
+    *((int*) if_.esp) = 0;
+  }
+  palloc_free_page (tokens);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
-  if (!success) 
-    thread_exit ();
+  if (!success) {
+    thread_current () ->load_success = 0;
+    exit (-1);
+  }
+  thread_current () ->load_success = 1;
+  sema_up (&thread_current () ->load_sema);
+  sema_down (&thread_current () -> meml_sema);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -74,6 +159,29 @@ start_process (void *file_name_)
      and jump to it. */
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
+}
+
+int process_add_file (struct file *f) {
+  struct thread *cur = thread_current ();
+  int new_file_index = cur->file_no;
+  cur ->fd[new_file_index] = f;
+  cur ->file_no += 1;
+  return new_file_index;
+}
+
+struct file *process_get_file (int fd) {
+  struct thread *cur = thread_current ();
+  // printf ("%d : fd\n", fd);
+  return cur -> fd[fd];
+}
+
+void process_close_file (int fd) {
+  struct thread *cur = thread_current ();
+  
+  if (!(cur ->fd[fd] == NULL)) {
+    file_close (cur ->fd[fd]);
+  }
+  cur ->fd[fd] = NULL;
 }
 
 /* Waits for thread TID to die and returns its exit status.  If
@@ -86,9 +194,20 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid) 
 {
-  return -1;
+  struct thread *child = get_child_process(child_tid);
+  if (child == NULL) {
+    return -1;
+  }
+  sema_up (&child -> meml_sema);
+  sema_down (&child -> wait_sema);
+  // if (child ->is_done != 1) {
+  //   return -1;
+  // }
+  int status = child ->exit_status;
+  remove_child_process (child);
+  return status;
 }
 
 /* Free the current process's resources. */
@@ -97,9 +216,23 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+  for (int i = 0; i < 128; i++) {
+    if (cur -> fd[i] != NULL) {
+      file_close (cur ->fd[i]);
+      cur ->fd[i] = NULL;
+    }
+  }
 
+  struct list_elem *e;
+  struct list *child_list = &cur ->children;
+  while (!list_empty (child_list)) {
+    e = list_begin (child_list);
+    struct thread *t = list_entry (e, struct thread, child_elem);
+    process_wait (t ->tid);
+  }
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
+  // file_close (cur ->file_running);
   pd = cur->pagedir;
   if (pd != NULL) 
     {
@@ -294,7 +427,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
               if (!load_segment (file, file_page, (void *) mem_page,
                                  read_bytes, zero_bytes, writable))
                 goto done;
-            }
+              }
           else
             goto done;
           break;
@@ -312,7 +445,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
   return success;
 }
 

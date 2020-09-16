@@ -181,6 +181,7 @@ thread_create (const char *name, int priority,
   t = palloc_get_page (PAL_ZERO);
   if (t == NULL)
     return TID_ERROR;
+
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
@@ -199,7 +200,19 @@ thread_create (const char *name, int priority,
   sf = alloc_frame (t, sizeof *sf);
   sf->eip = switch_entry;
   sf->ebp = 0;
+
+#ifdef USERPROG
+  t->parent = running_thread(); // 이거 맞냐?
   
+  t->is_done = 0;
+  t->load_success = 0;
+  sema_init(&t->wait_sema, 0);
+  sema_init(&t->load_sema, 0);
+  sema_init(&t->meml_sema, 0);
+  list_init (&(t->children));
+  list_push_back(&thread_current()->children, &t->child_elem);
+#endif
+
   /* Add to run queue. */
   thread_unblock (t);
 
@@ -207,6 +220,33 @@ thread_create (const char *name, int priority,
     thread_yield ();
   }
   return tid;
+}
+
+struct thread *get_child_process (int pid) {
+#ifdef USERPROG
+  struct list *children = &thread_current () -> children;
+  struct list_elem *e;
+  for (e = list_begin (children); e != list_end (children); e = list_next (e)) {
+    struct thread *t = list_entry (e, struct thread, child_elem);
+    if (t ->tid == pid) {
+      return t;
+    }
+  }
+#endif
+  return NULL;
+}
+
+
+void remove_child_process (struct thread *cp) {
+
+#ifdef USERPROG
+  list_remove (&cp ->child_elem);
+  for (int i = 2; i < 128; i++) {
+    file_close (cp ->fd[i]);
+  }
+#endif
+
+  palloc_free_page (cp);
 }
 
 /* Puts the current thread to sleep.  It will not be scheduled
@@ -244,6 +284,8 @@ thread_unblock (struct thread *t)
   ASSERT (t->status == THREAD_BLOCKED);
   list_insert_ordered (&ready_list, &t->elem, thread_priority_compare, NULL);
   t->status = THREAD_READY;
+  if (thread_current() != idle_thread && thread_current()->priority < t->priority )
+    thread_yield();
   intr_set_level (old_level);
 }
 
@@ -355,6 +397,11 @@ thread_exit (void)
      when it calls thread_schedule_tail(). */
   intr_disable ();
   list_remove (&thread_current()->allelem);
+#ifdef USERPROG
+  thread_current ()->is_done = 1;
+  sema_up (&thread_current() ->wait_sema);
+#endif
+  
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
@@ -611,6 +658,13 @@ init_thread (struct thread *t, const char *name, int priority)
   list_init (&t->donations);
   t->magic = THREAD_MAGIC;
 
+#ifdef USERPROG
+  list_init (&t->children);
+  for (int i = 0; i < 128; i++) {
+    t->fd[i] = NULL;
+  }
+  t->file_no = 2;
+#endif
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
@@ -675,6 +729,7 @@ thread_schedule_tail (struct thread *prev)
 #ifdef USERPROG
   /* Activate the new address space. */
   process_activate ();
+  return;
 #endif
 
   /* If the thread we switched from is dying, destroy its struct

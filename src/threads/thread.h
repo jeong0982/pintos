@@ -5,6 +5,9 @@
 #include <list.h>
 #include <stdint.h>
 
+#include "filesys/file.h"
+#include "threads/synch.h"
+
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -98,8 +101,21 @@ struct thread
     struct list_elem donation_elem;     /* 현재 thread가 priority를 donate 할 때 list에 들어가기 위한 elem */
 
 #ifdef USERPROG
+    /* For process hierarchy */
+    struct thread* parent;               /* 부모 프로세스의 디스크립터 */
+    struct list_elem child_elem;         /* 부모의 리스트의 자식 리스트에 들어갈 element */
+    struct list children;                /* 자식 리스트 */
+    struct semaphore wait_sema;          /* Synch for process_wait */
+    struct semaphore load_sema;          /* Synch for exec */
+    struct semaphore meml_sema;          /* For Memory Lock */
+    int exit_status;                     /* Store own exit status */
+    bool load_success;                   /* load 성공 여부 */
+    int is_done;                         /* 종료 유무 */
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+    struct file* fd[128];
+    int file_no;                        /* Number of file */
+    struct file* file_running;
 #endif
 
     /* Owned by thread.c. */
@@ -119,6 +135,8 @@ void thread_print_stats (void);
 
 typedef void thread_func (void *aux);
 tid_t thread_create (const char *name, int priority, thread_func *, void *);
+struct thread *get_child_process (int);
+void remove_child_process (struct thread *);
 
 void thread_block (void);
 void thread_unblock (struct thread *);
