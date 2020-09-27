@@ -117,7 +117,7 @@ struct thread
     int file_no;                        /* Number of file */
     struct file* file_running;
 #endif
-
+    struct hash spt;
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
