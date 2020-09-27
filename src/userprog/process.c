@@ -18,6 +18,8 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "vm/page.h"
+#include "vm/frame.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -447,7 +449,48 @@ load (const char *file_name, void (**eip) (void), void **esp)
   /* We arrive here whether the load is successful or not. */
   return success;
 }
-
+
+bool load_from_exec (struct spte *spte)
+{
+    uint8_t *frame = frame_alloc(flags, spte);
+    if (!frame) return false;
+
+    if (spte->read_bytes > 0){
+        lock_acquire(&filesys_lock);
+        if ((int) spte->read_bytes != file_read_at(spte->file, frame, spte->read_bytes, spte->offset)){
+	  lock_release(&filesys_lock);
+	  frame_free(frame);
+	  return false;
+        }
+        lock_release(&filesys_lock);
+        memset(frame + spte->read_bytes, 0, spte->zero_bytes);
+    }
+
+    if (!install_page(spte->uva, frame, spte->writable)) {
+        frame_free(frame);
+        return false;
+    }
+
+    spte->state = MEMORY;  
+    return true;
+}
+
+bool load_from_swap (struct spte *spte)
+{
+    uint8_t *frame = frame_alloc (PAL_USER, spte);
+    if (!frame)
+        return false;
+  
+    if (!install_page(spte->uva, frame, spte->writable)){
+        frame_free(frame);
+        return false;
+    }
+    swap_in(spte->swap_index, spte->uva);
+    spte->state = MEMORY;
+    
+    return true;
+}
+
 /* load() helpers. */
 
 static bool install_page (void *upage, void *kpage, bool writable);
