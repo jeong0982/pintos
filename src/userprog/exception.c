@@ -151,14 +151,14 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
   bool load = false;
-  if (not_present && fault_addr > USER_VADDR_BOTTOM && is_user_vaddr (fault_addr)) {
+  if (not_present && fault_addr > PHYS_BASE /*USER_VADDR_BOTTOM*/ && is_user_vaddr (fault_addr)) {
      struct spte *spte = get_spte (fault_addr);
      if (spte) {
         if (spte ->state == EXEC_FILE)
          load = load_from_exec (spte);
         else if (spte ->state == SWAP_DISK)
          load = load_from_swap (spte);
-     } else if (fault_addr >= f ->esp - STACK_HEURISTIC) {
+     } else if (fault_addr >= f ->esp - PHYS_BASE /*STACK_HEURISTIC*/) {
         load = stack_growth (fault_addr);
      }
   }

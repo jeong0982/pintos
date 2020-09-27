@@ -18,8 +18,8 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-#include "vm/page.h"
 #include "vm/frame.h"
+#include "vm/swap.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -450,29 +450,35 @@ load (const char *file_name, void (**eip) (void), void **esp)
   return success;
 }
 
+/* load() helpers. */
+
+static bool install_page (void *upage, void *kpage, bool writable);
+
+
 bool load_from_exec (struct spte *spte)
 {
-    uint8_t *frame = frame_alloc(flags, spte);
-    if (!frame) return false;
+  enum palloc_flags flags = PAL_USER;
+  uint8_t *frame = frame_alloc(flags, spte);
+  if (!frame) return false;
 
-    if (spte->read_bytes > 0){
-        lock_acquire(&filesys_lock);
-        if ((int) spte->read_bytes != file_read_at(spte->file, frame, spte->read_bytes, spte->offset)){
-	  lock_release(&filesys_lock);
-	  frame_free(frame);
-	  return false;
-        }
-        lock_release(&filesys_lock);
-        memset(frame + spte->read_bytes, 0, spte->zero_bytes);
-    }
+  if (spte->read_bytes > 0){
+      lock_acquire(&filesys_lock);
+      if ((int) spte->read_bytes != file_read_at(spte->file, frame, spte->read_bytes, spte->offset)){
+  lock_release(&filesys_lock);
+  // frame_free(frame);
+  return false;
+      }
+      lock_release(&filesys_lock);
+      memset(frame + spte->read_bytes, 0, spte->zero_bytes);
+  }
 
-    if (!install_page(spte->uva, frame, spte->writable)) {
-        frame_free(frame);
-        return false;
-    }
+  if (!install_page(spte->upage, frame, spte->writable)) {
+      // frame_free(frame);
+      return false;
+  }
 
-    spte->state = MEMORY;  
-    return true;
+  spte->state = MEMORY;  
+  return true;
 }
 
 bool load_from_swap (struct spte *spte)
@@ -481,19 +487,15 @@ bool load_from_swap (struct spte *spte)
     if (!frame)
         return false;
   
-    if (!install_page(spte->uva, frame, spte->writable)){
-        frame_free(frame);
+    if (!install_page(spte->upage, frame, spte->writable)){
+        // frame_free(frame);
         return false;
     }
-    swap_in(spte->swap_index, spte->uva);
+    // swap_in(spte->swap_location, spte->upage);
     spte->state = MEMORY;
     
     return true;
 }
-
-/* load() helpers. */
-
-static bool install_page (void *upage, void *kpage, bool writable);
 
 /* Checks whether PHDR describes a valid, loadable segment in
    FILE and returns true if so, false otherwise. */
