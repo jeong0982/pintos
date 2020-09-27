@@ -2,6 +2,7 @@
 #include "vm/page.h"
 #include "threads/thread.h"
 #include "threads/synch.h"
+#include "threads/palloc.h"
 
 struct list frame_table;
 struct lock frame_table_lock;
@@ -13,10 +14,10 @@ struct fte {
     struct list_elem elem;
 };
 
-init_frame_table
-frame_alloc
-frame_free
-find_victim
-create_fte
-frame_table_update
-destroy_frame_table
+uint8_t *frame_alloc (enum palloc_flags, struct spte*);
+// init_frame_table
+// frame_free
+struct fte *find_victim (void);
+// create_fte
+void frame_table_update (struct fte*, struct spte*, struct thread*);
+// destroy_frame_table

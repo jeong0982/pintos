@@ -1,7 +1,6 @@
 #include "vm/frame.h"
-#incldue "vm/page.h"
 
-void* 
+uint8_t* 
 frame_alloc (enum palloc_flags flags, struct spte *spte){
     if ( (flags & PAL_USER) == 0 )
         return NULL;
@@ -16,7 +15,7 @@ frame_alloc (enum palloc_flags flags, struct spte *spte){
         swap_out(frame);
 
         // swap_out된 frame의 spte, pte 업데이트
-        spte_update (fte->spte);
+        update_spte (fte->spte);
         frame_table_update(fte, spte, thread_current());
     } else {
         create_fte(frame);    

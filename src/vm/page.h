@@ -19,6 +19,8 @@ struct spte {
     size_t read_bytes;
     size_t zero_bytes;
 
+    bool writable;
+
     // swap_out 된 경우, swap disk에서의 page의 위치
     block_sector_t swap_location;
 };
@@ -26,5 +28,5 @@ struct spte {
 void init_spt (void);
 struct spte *get_spte (void *);
 bool create_spte_from_exec (struct file *, int32_t, uint8_t *, uint32_t, uint32_t);
-void update_spte (struct hash *, struct spte *);
+void update_spte (struct spte *);
 void destroy_spt (struct hash *);
