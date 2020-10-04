@@ -25,8 +25,11 @@ struct spte {
     block_sector_t swap_location;
 };
 
-void init_spt (void);
+void init_spt (struct hash*);
+bool spte_less (const struct hash_elem*, const struct hash_elem*, void* UNUSED);
+unsigned spte_hash_func (const struct hash_elem *, void* UNUSED);
 struct spte *get_spte (void *);
 bool create_spte_from_exec (struct file *, int32_t, uint8_t *, uint32_t, uint32_t);
-void update_spte (struct spte *);
+//void update_spte (struct spte *);
+static void destroy_spte (struct hash_elem *, void * UNUSED);
 void destroy_spt (struct hash *);

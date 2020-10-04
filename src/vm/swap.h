@@ -6,5 +6,5 @@ struct block *swap_disk;
 struct lock swap_lock;
 
 // swap_table_init
-void swap_out (void *);
+block_sector_t swap_out (void *);
 void swap_in (block_sector_t, void *);
