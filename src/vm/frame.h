@@ -15,9 +15,9 @@ struct fte {
 };
 
 uint8_t *frame_alloc (enum palloc_flags, struct spte*);
-// init_frame_table
-// frame_free
+void frame_table_init (void);
+void frame_free (void *);
 struct fte *find_victim (void);
 void create_fte (void *);
 void frame_table_update (struct fte*, struct spte*, struct thread*);
-// destroy_frame_table
+void remove_frame (void *);
