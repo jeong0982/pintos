@@ -10,6 +10,7 @@ enum status {
 struct spte {
     struct hash_elem elem;
 
+
     enum status state;
     void *upage;
 
@@ -20,6 +21,7 @@ struct spte {
     size_t zero_bytes;
 
     bool writable;
+    bool is_loaded;
 
     // swap_out 된 경우, swap disk에서의 page의 위치
     block_sector_t swap_location;
@@ -33,3 +35,4 @@ bool create_spte_from_exec (struct file *, int32_t, uint8_t *, uint32_t, uint32_
 //void update_spte (struct spte *);
 static void destroy_spte (struct hash_elem *, void * UNUSED);
 void destroy_spt (struct hash *);
+bool spt_insert_file (struct file *, off_t, uint8_t *, uint32_t, uint32_t, bool);

@@ -1,4 +1,5 @@
 #include "vm/page.h"
+#include "threads/malloc.h"
 
 void
 init_spt (struct hash* h) {
@@ -24,7 +25,11 @@ get_spte(void *upage) {
   struct spte spte;
   struct hash_elem *e;
   spte.upage = upage;
-  e = hash_find(&thread_current()->spt, &spte.elem);
+  e = hash_find (&thread_current()->spt, &spte.elem);
+  if (e == NULL)
+    return NULL;
+  
+  return hash_entry(e, struct spte, elem);
 }
 
 bool 
@@ -59,5 +64,32 @@ void destroy_spt (struct hash *spt) {
 }
 
 void update_spte(struct spte *spte) {
+
+}
+
+bool spt_insert_file (struct file *file, off_t ofs, uint8_t *upage, uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
+  struct spte *spte;
+  struct hash_elem *hash_result;
+  struct thread *t = thread_current();
+
+  spte = calloc (1, sizeof *spte);
+  
+  if (spte == NULL)
+    return false;
+  
+  spte->upage = upage;
+  spte->state = EXEC_FILE;
+  spte->file = file;
+  spte->offset = ofs;
+  spte->read_bytes = read_bytes;
+  spte->zero_bytes = zero_bytes;
+  spte->writable = writable;
+  spte->is_loaded = false;
+
+  hash_result = hash_insert (&t->spt, &spte->elem);
+  if (hash_result != NULL)
+    return false;
+  
+  return true;
 
 }
