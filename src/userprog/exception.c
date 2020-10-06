@@ -150,12 +150,20 @@ page_fault (struct intr_frame *f)
   not_present = (f->error_code & PF_P) == 0;
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
+
+  /* To implement virtual memory, delete the rest of the function
+     body, and replace it with code that brings in the page to
+     which fault_addr refers. */
   bool load = false;
+  printf ("page fault : %p\n", fault_addr);
+//   if (!not_present)
+//     exit (-1);
   if (not_present && fault_addr > 0x8048000 && is_user_vaddr (fault_addr)) {
      struct spte *spte = get_spte (fault_addr);
-     if (spte) {
-        if (spte ->state == EXEC_FILE)
+     if (spte != NULL) {
+        if (spte ->state == EXEC_FILE) {
          load = load_from_exec (spte);
+        }
         else if (spte ->state == SWAP_DISK)
          load = load_from_swap (spte);
      } else if (fault_addr >= f ->esp - PHYS_BASE /*STACK_HEURISTIC*/) {
@@ -163,17 +171,16 @@ page_fault (struct intr_frame *f)
      }
   }
 
-  if (!user || is_kernel_vaddr(fault_addr)) {
-    exit(-1);
-  }
-  /* To implement virtual memory, delete the rest of the function
-     body, and replace it with code that brings in the page to
-     which fault_addr refers. */
-  printf ("Page fault at %p: %s error %s page in %s context.\n",
-          fault_addr,
-          not_present ? "not present" : "rights violation",
-          write ? "writing" : "reading",
-          user ? "user" : "kernel");
-  kill (f);
+//   if (!user || is_kernel_vaddr(fault_addr)) {
+//     exit(-1);
+//   }
+   if (load == false) {
+      printf ("Page fault at %p: %s error %s page in %s context.\n",
+               fault_addr,
+               not_present ? "not present" : "rights violation",
+               write ? "writing" : "reading",
+               user ? "user" : "kernel");
+      kill (f);
+   }
 }
 

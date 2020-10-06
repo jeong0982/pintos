@@ -1,5 +1,6 @@
 #include "vm/page.h"
 #include "threads/malloc.h"
+#include "threads/vaddr.h"
 
 void
 init_spt (struct hash* h) {
@@ -24,10 +25,13 @@ struct spte*
 get_spte(void *upage) {
   struct spte spte;
   struct hash_elem *e;
-  spte.upage = upage;
+  void *new_upage = pg_round_down (upage);
+  spte.upage = new_upage;
+  printf ("%p : upage\n", new_upage);
   e = hash_find (&thread_current()->spt, &spte.elem);
-  if (e == NULL)
+  if (e == NULL) {
     return NULL;
+  }
   
   return hash_entry(e, struct spte, elem);
 }
@@ -76,7 +80,7 @@ bool spt_insert_file (struct file *file, off_t ofs, uint8_t *upage, uint32_t rea
   
   if (spte == NULL)
     return false;
-  
+
   spte->upage = upage;
   spte->state = EXEC_FILE;
   spte->file = file;
@@ -87,6 +91,7 @@ bool spt_insert_file (struct file *file, off_t ofs, uint8_t *upage, uint32_t rea
   spte->is_loaded = false;
 
   hash_result = hash_insert (&t->spt, &spte->elem);
+  printf ("%p : vaddr\n", upage);
   if (hash_result != NULL)
     return false;
   

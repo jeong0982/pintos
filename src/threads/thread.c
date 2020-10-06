@@ -11,6 +11,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "vm/page.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -657,7 +658,6 @@ init_thread (struct thread *t, const char *name, int priority)
   t->wait_on_lock = NULL;
   list_init (&t->donations);
   t->magic = THREAD_MAGIC;
-
 #ifdef USERPROG
   list_init (&t->children);
   for (int i = 0; i < 128; i++) {

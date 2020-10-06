@@ -73,7 +73,7 @@ start_process (void *file_name_)
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
-
+  init_spt (&thread_current () ->spt);
   const char **tokens = (const char**) palloc_get_page(0);
   if (tokens == NULL) {
     palloc_free_page (file_name);
@@ -465,16 +465,16 @@ bool load_from_exec (struct spte *spte)
   if (!frame) return false;
 
   if (spte->read_bytes > 0){
-      lock_acquire(&filesys_lock);
-      if ((int) spte->read_bytes != file_read_at(spte->file, frame, spte->read_bytes, spte->offset)){
-  lock_release(&filesys_lock);
-  // frame_free(frame);
-  return false;
-      }
+    lock_acquire(&filesys_lock);
+    if ((int) spte->read_bytes != file_read_at(spte->file, frame, spte->read_bytes, spte->offset)){
       lock_release(&filesys_lock);
-      memset(frame + spte->read_bytes, 0, spte->zero_bytes);
+      // frame_free(frame);
+      return false;
+    }
+    lock_release(&filesys_lock);
+    memset(frame + spte->read_bytes, 0, spte->zero_bytes);
   }
-
+  printf ("%p: install page\n", spte ->upage);
   if (!install_page(spte->upage, frame, spte->writable)) {
       // frame_free(frame);
       return false;
@@ -621,9 +621,8 @@ load_segment_lazily (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-      
       /* Add the page to the process's address space. */
-      if (!spt_insert_file (file, ofs, upage, read_bytes, zero_bytes, writable)) 
+      if (!spt_insert_file (file, ofs, upage, page_read_bytes, page_zero_bytes, writable)) 
         {
           return false; 
         }
