@@ -122,6 +122,7 @@ kill (struct intr_frame *f)
    can find more information about both of these in the
    description of "Interrupt 14--Page Fault Exception (#PF)" in
    [IA32-v3a] section 5.15 "Exception and Interrupt Reference". */
+
 static void
 page_fault (struct intr_frame *f) 
 {
@@ -155,9 +156,18 @@ page_fault (struct intr_frame *f)
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
   bool load = false;
+  
   printf ("page fault : %p\n", fault_addr);
-//   if (!not_present)
-//     exit (-1);
+
+//   if (!not_present) {
+//     struct spte *spte = get_spte (fault_addr);
+//     if (spte != NULL) {
+//        if (spte ->state == MEMORY) {
+//           return;
+//        }
+//     }
+//   }
+
   if (not_present && fault_addr > 0x8048000 && is_user_vaddr (fault_addr)) {
      struct spte *spte = get_spte (fault_addr);
      if (spte != NULL) {
