@@ -74,6 +74,7 @@ start_process (void *file_name_)
   struct intr_frame if_;
   bool success;
   init_spt (&thread_current () ->spt);
+  lock_init (&swap_lock);
   const char **tokens = (const char**) palloc_get_page(0);
   if (tokens == NULL) {
     palloc_free_page (file_name);
@@ -493,10 +494,10 @@ bool load_from_swap (struct spte *spte)
         return false;
   
     if (!install_page(spte->upage, frame, spte->writable)){
-        // frame_free(frame);
+        frame_free (frame);
         return false;
     }
-    // swap_in(spte->swap_location, spte->upage);
+    swap_in(spte->swap_location, spte->upage);
     spte->state = MEMORY;
     
     return true;
