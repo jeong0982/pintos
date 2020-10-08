@@ -8,24 +8,24 @@ frame_alloc (enum palloc_flags flags, struct spte *spte){
         return NULL;
   
     void *frame = palloc_get_page(flags);
-    // if (!frame){
-    //     lock_acquire(&frame_table_lock);
-    //     struct fte *fte = find_victim();
-    //     lock_release(&frame_table_lock);   
+    if (!frame){
+        lock_acquire(&frame_table_lock);
+        struct fte *fte = find_victim();
+        lock_release(&frame_table_lock);   
 
-    //     frame = fte->frame;
-    //     swap_out(frame);
+        frame = fte->frame;
+        swap_out(frame);
 
-    //     // swap_out된 frame의 spte, pte 업데이트
-    //     update_spte (fte->spte);
-    //     frame_table_update(fte, spte, thread_current());
-    // } else {
-    //     create_fte(frame);
-    //     lock_acquire(&frame_table_lock);
-    //     struct fte* fte = list_entry (list_back (&frame_table), struct fte, elem);
-    //     fte ->spte = spte;
-    //     lock_release(&frame_table_lock); 
-    // }
+        // swap_out된 frame의 spte, pte 업데이트
+        update_spte (fte->spte);
+        frame_table_update(fte, spte, thread_current());
+    } else {
+        create_fte(frame);
+        lock_acquire(&frame_table_lock);
+        struct fte* fte = list_entry (list_back (&frame_table), struct fte, elem);
+        fte ->spte = spte;
+        lock_release(&frame_table_lock); 
+    }
     return frame;
 }
 
