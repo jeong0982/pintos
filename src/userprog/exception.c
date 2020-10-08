@@ -158,7 +158,7 @@ page_fault (struct intr_frame *f)
   bool load = false;
 
   if (!not_present) {
-     //printf ("%d %d \n", write, user);
+     // printf ("%d %d \n", write, user);
      exit (-1);
   }
 
@@ -166,19 +166,23 @@ page_fault (struct intr_frame *f)
      struct spte *spte = get_spte (fault_addr);
      if (spte != NULL) {
         if (spte ->state == EXEC_FILE) {
+           printf ("%p\n", spte ->upage);
          load = load_from_exec (spte);
+         printf ("%d\n", load);
         }
-        else if (spte ->state == SWAP_DISK)
-         load = load_from_swap (spte);
+        else if (spte ->state == SWAP_DISK) {
+           load = load_from_swap (spte);
+        }
      } else if (fault_addr >= f ->esp - PHYS_BASE /*STACK_HEURISTIC*/) {
+        printf ("FDFDF\n");
         // load = stack_growth (fault_addr);
      }
   }
 
-//   if (!user || is_kernel_vaddr(fault_addr)) {
-//     exit(-1);
-//   }
    if (load == false) {
+      if (!user) {
+         exit (-1);
+      }
       printf ("Page fault at %p: %s error %s page in %s context.\n",
                fault_addr,
                not_present ? "not present" : "rights violation",
