@@ -27,7 +27,6 @@ get_spte(void *upage) {
   struct hash_elem *e;
   void *new_upage = pg_round_down (upage);
   spte.upage = new_upage;
-  printf ("get spte : %p : upage\n", new_upage);
   e = hash_find (&thread_current()->spt, &spte.elem);
   if (e == NULL) {
     return NULL;
@@ -74,7 +73,6 @@ void update_spte(struct spte *spte) {
 bool spt_insert_file (struct file *file, off_t ofs, uint8_t *upage, uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
   struct spte *spte;
   struct hash_elem *hash_result;
-  struct thread *t = thread_current();
 
   spte = calloc (1, sizeof(struct spte));
   
@@ -90,8 +88,7 @@ bool spt_insert_file (struct file *file, off_t ofs, uint8_t *upage, uint32_t rea
   spte->writable = writable;
   spte->is_loaded = false;
 
-  hash_result = hash_insert (&t->spt, &spte->elem);
-  printf ("spt_insert_file : %p : vaddr\n", upage);
+  hash_result = hash_insert (&thread_current ()->spt, &spte->elem);
   if (hash_result != NULL)
     return false;
   

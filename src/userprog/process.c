@@ -463,7 +463,6 @@ bool load_from_exec (struct spte *spte)
 {
   enum palloc_flags flags = PAL_USER;
   uint8_t *frame = frame_alloc(flags, spte);
-  printf ("%p : kpage\n", frame);
   if (!frame) return false;
 
   if (spte->read_bytes > 0){
@@ -476,15 +475,14 @@ bool load_from_exec (struct spte *spte)
     lock_release(&filesys_lock);
     memset(frame + spte->read_bytes, 0, spte->zero_bytes);
   }
-  printf ("load_from_exec : %p: install page\n", spte ->upage);
-  printf ("%d : writable\n", spte ->writable);
+  // printf ("load_from_exec : %p: install page\n", spte ->upage);
+  // printf ("%d : writable\n", spte ->writable);
   if (!install_page(spte->upage, frame, spte->writable)) {
       // frame_free(frame);
       return false;
   }
 
   spte->state = MEMORY;
-  printf("load success yay\n");
   return true;
 }
 
@@ -579,11 +577,10 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
          and zero the final PAGE_ZERO_BYTES bytes. */
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
-      printf ("%p : upage\n", upage);
-      printf ("writable ? : %d\n", writable);
+
       /* Get a page of memory. */
       uint8_t *kpage = palloc_get_page (PAL_USER);
-      printf ("%p : kpage\n", kpage);
+
       if (kpage == NULL)
         return false;
 
@@ -636,6 +633,7 @@ load_segment_lazily (struct file *file, off_t ofs, uint8_t *upage,
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
+      ofs += page_read_bytes;
     }
   return true;
 }
@@ -650,7 +648,6 @@ setup_stack (void **esp)
   bool success = false;
 
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-  printf ("%p : palloc setup stack\n", kpage);
   if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
