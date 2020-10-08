@@ -62,7 +62,7 @@ get_argument (void *esp, int *arg, int count) {
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
-  // printf("syscall num : %d\n", *(uint32_t *)(f->esp));
+  printf("syscall num : %d\n", *(uint32_t *)(f->esp));
   // printf ("system call!\n");
   // hex_dump(f->esp, f->esp, 100, 1);
   int *arg = (int *) palloc_get_page (0);
@@ -156,6 +156,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     }
     case SYS_WRITE: {
       get_argument (sp, arg, 3);
+      printf ("%p %p %p\n", arg[0], arg[1], arg[2]);
       f ->eax = write(arg[0], (void *) arg[1], arg[2]);
       palloc_free_page (arg);
       break;

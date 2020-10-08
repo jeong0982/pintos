@@ -430,7 +430,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
                   read_bytes = 0;
                   zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
                 }
-              if (!load_segment (file, file_page, (void *) mem_page,
+              if (!load_segment_lazily (file, file_page, (void *) mem_page,
                                  read_bytes, zero_bytes, writable))
                 goto done;
               }
@@ -463,6 +463,7 @@ bool load_from_exec (struct spte *spte)
 {
   enum palloc_flags flags = PAL_USER;
   uint8_t *frame = frame_alloc(flags, spte);
+  printf ("%p : kpage\n", frame);
   if (!frame) return false;
 
   if (spte->read_bytes > 0){
@@ -582,6 +583,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       printf ("writable ? : %d\n", writable);
       /* Get a page of memory. */
       uint8_t *kpage = palloc_get_page (PAL_USER);
+      printf ("%p : kpage\n", kpage);
       if (kpage == NULL)
         return false;
 
@@ -616,7 +618,7 @@ load_segment_lazily (struct file *file, off_t ofs, uint8_t *upage,
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (ofs % PGSIZE == 0);
   file_seek (file, ofs);
-  printf ("read bytes : %d\n", read_bytes);
+
   while (read_bytes > 0 || zero_bytes > 0) 
     {
       /* Calculate how to fill this page.
@@ -624,8 +626,7 @@ load_segment_lazily (struct file *file, off_t ofs, uint8_t *upage,
          and zero the final PAGE_ZERO_BYTES bytes. */
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
-      /* Add the page to the process's address space. */
-      printf ("%p writable : %d\n", upage, writable);
+
       if (!spt_insert_file (file, ofs, upage, page_read_bytes, page_zero_bytes, writable)) 
         {
           return false; 
@@ -649,6 +650,7 @@ setup_stack (void **esp)
   bool success = false;
 
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+  printf ("%p : palloc setup stack\n", kpage);
   if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
