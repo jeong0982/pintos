@@ -10,7 +10,9 @@ frame_alloc (enum palloc_flags flags, struct spte *spte){
     void *frame = palloc_get_page(flags);
     if (!frame){
         lock_acquire(&frame_table_lock);
+        printf ("find victim\n");
         struct fte *fte = find_victim();
+        printf ("victim addr : %p\n", fte ->spte ->upage);
         lock_release(&frame_table_lock);   
 
         frame = fte->frame;
