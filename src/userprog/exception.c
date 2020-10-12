@@ -166,15 +166,12 @@ page_fault (struct intr_frame *f)
      struct spte *spte = get_spte (fault_addr);
      if (spte != NULL) {
         if (spte ->state == EXEC_FILE) {
-           printf ("%p\n", spte ->upage);
          load = load_from_exec (spte);
-         printf ("%d\n", load);
         }
         else if (spte ->state == SWAP_DISK) {
            load = load_from_swap (spte);
         }
      } else if (fault_addr >= f ->esp - PHYS_BASE /*STACK_HEURISTIC*/) {
-        printf ("FDFDF\n");
         // load = stack_growth (fault_addr);
      }
   }

@@ -13,13 +13,12 @@ frame_alloc (enum palloc_flags flags, struct spte *spte){
         printf ("find victim\n");
         struct fte *fte = find_victim();
         printf ("victim addr : %p\n", fte ->spte ->upage);
-        lock_release(&frame_table_lock);   
+        lock_release(&frame_table_lock);
 
         frame = fte->frame;
-        swap_out(frame);
-
+        block_sector_t idx = swap_out(frame);
         // swap_out된 frame의 spte, pte 업데이트
-        update_spte (fte->spte);
+        update_spte_to_swap (fte->spte, idx);
         frame_table_update(fte, spte, thread_current());
     } else {
         create_fte(frame);
@@ -80,5 +79,6 @@ void frame_free (void *frame) {
 }
 
 void frame_table_update (struct fte* frame, struct spte* spte, struct thread* t) {
-
+    frame ->spte = spte;
+    frame ->thread = t;
 }

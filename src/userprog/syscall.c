@@ -210,9 +210,6 @@ tid_t exec (const char *cmd_line) {
   if (child-> load_success) {
     return tid;
   } else {
-    // printf ("%d load failed\n", child ->tid);
-    // printf (cmd_line);
-    // printf ("\nexec returns -1\n");
     return -1;
   }
 }

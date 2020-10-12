@@ -489,15 +489,19 @@ bool load_from_exec (struct spte *spte)
 
 bool load_from_swap (struct spte *spte)
 {
+    printf ("load from swap\n");
     uint8_t *frame = frame_alloc (PAL_USER, spte);
-    if (!frame)
+    if (!frame) {
+        printf ("no frame\n");
         return false;
-  
+    }
     if (!install_page(spte->upage, frame, spte->writable)){
+        printf ("install fail\n");
         frame_free (frame);
         return false;
     }
     swap_in(spte->swap_location, spte->upage);
+    printf ("swap in finish\n");
     spte->state = MEMORY;
     
     return true;
