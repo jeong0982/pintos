@@ -1,6 +1,7 @@
 #include "vm/page.h"
 #include "threads/malloc.h"
 #include "threads/vaddr.h"
+#include "userprog/pagedir.h"
 
 void
 init_spt (struct hash* h) {
@@ -57,7 +58,7 @@ static void destroy_spte (struct hash_elem *e, void *aux UNUSED) {
   struct spte *spte;
   spte = hash_entry (e, struct spte, elem);
   if (spte ->state & SWAP_DISK) {
-    // vm_clear_swap_slot (spte ->swap_slot_idx);  
+    swap_table_free (spte ->swap_location);  
   }
   free (spte);
 }
@@ -66,8 +67,10 @@ void destroy_spt (struct hash *spt) {
   hash_destroy (spt, destroy_spte);
 }
 
-void update_spte(struct spte *spte) {
-
+void update_spte_to_swap(struct spte *spte, block_sector_t idx) {
+  spte ->state = SWAP_DISK;
+  spte ->swap_location = idx;
+  pagedir_clear_page (thread_current () ->pagedir, spte ->upage);
 }
 
 bool spt_insert_file (struct file *file, off_t ofs, uint8_t *upage, uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
