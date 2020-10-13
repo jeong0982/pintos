@@ -74,7 +74,6 @@ start_process (void *file_name_)
   struct intr_frame if_;
   bool success;
   init_spt (&thread_current () ->spt);
-  lock_init (&swap_lock);
   const char **tokens = (const char**) palloc_get_page(0);
   if (tokens == NULL) {
     palloc_free_page (file_name);
@@ -470,7 +469,7 @@ bool load_from_exec (struct spte *spte)
     lock_acquire(&filesys_lock);
     if ((int) spte->read_bytes != file_read_at(spte->file, frame, spte->read_bytes, spte->offset)){
       lock_release(&filesys_lock);
-      // frame_free(frame);
+      frame_free(frame);
       return false;
     }
     lock_release(&filesys_lock);
@@ -479,7 +478,7 @@ bool load_from_exec (struct spte *spte)
   // printf ("load_from_exec : %p: install page\n", spte ->upage);
   // printf ("%d : writable\n", spte ->writable);
   if (!install_page(spte->upage, frame, spte->writable)) {
-      // frame_free(frame);
+      frame_free(frame);
       return false;
   }
 
@@ -489,19 +488,18 @@ bool load_from_exec (struct spte *spte)
 
 bool load_from_swap (struct spte *spte)
 {
-    printf ("load from swap\n");
+    // printf ("load from swap\n");
     uint8_t *frame = frame_alloc (PAL_USER, spte);
     if (!frame) {
-        printf ("no frame\n");
+        // printf ("no frame\n");
         return false;
     }
     if (!install_page(spte->upage, frame, spte->writable)){
-        printf ("install fail\n");
+        // printf ("install fail\n");
         frame_free (frame);
         return false;
     }
-    swap_in(spte->swap_location, spte->upage);
-    printf ("swap in finish\n");
+    swap_in(spte->swap_location, frame);
     spte->state = MEMORY;
     
     return true;
@@ -638,7 +636,7 @@ load_segment_lazily (struct file *file, off_t ofs, uint8_t *upage,
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
-      ofs += page_read_bytes;
+      ofs += PGSIZE;
     }
   return true;
 }

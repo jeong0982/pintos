@@ -29,6 +29,7 @@ get_spte(void *upage) {
   void *new_upage = pg_round_down (upage);
   spte.upage = new_upage;
   e = hash_find (&thread_current()->spt, &spte.elem);
+  printf ("%p    %p\n", e, upage);
   if (e == NULL) {
     return NULL;
   }
