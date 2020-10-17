@@ -464,17 +464,11 @@ bool load_from_exec (struct spte *spte)
   enum palloc_flags flags = PAL_USER;
   uint8_t *frame = frame_alloc(flags, spte);
   if (!frame) return false;
-
-  if (spte->read_bytes > 0){
-    lock_acquire(&filesys_lock);
-    if ((int) spte->read_bytes != file_read_at(spte->file, frame, spte->read_bytes, spte->offset)){
-      lock_release(&filesys_lock);
-      frame_free(frame);
-      return false;
-    }
-    lock_release(&filesys_lock);
-    memset(frame + spte->read_bytes, 0, spte->zero_bytes);
+  if ((int) spte->read_bytes != file_read_at(spte->file, frame, spte->read_bytes, spte->offset)){
+    frame_free(frame);
+    return false;
   }
+  memset(frame + spte->read_bytes, 0, spte->zero_bytes);
   // printf ("load_from_exec : %p: install page\n", spte ->upage);
   // printf ("%d : writable\n", spte ->writable);
   if (!install_page(spte->upage, frame, spte->writable)) {
@@ -503,6 +497,16 @@ bool load_from_swap (struct spte *spte)
     spte->state = MEMORY;
     
     return true;
+}
+
+bool stack_growth (void* fault_addr)
+{
+  struct spte *new_spte = create_spte_for_stack (fault_addr);
+  uint8_t *frame = frame_alloc (PAL_USER | PAL_ZERO, new_spte);
+  if (!install_page (new_spte ->upage, frame, new_spte ->writable)) {
+    frame_free (frame);
+    return false;
+  }
 }
 
 /* Checks whether PHDR describes a valid, loadable segment in
@@ -626,7 +630,6 @@ load_segment_lazily (struct file *file, off_t ofs, uint8_t *upage,
          and zero the final PAGE_ZERO_BYTES bytes. */
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
-
       if (!spt_insert_file (file, ofs, upage, page_read_bytes, page_zero_bytes, writable)) 
         {
           return false; 

@@ -156,27 +156,27 @@ page_fault (struct intr_frame *f)
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
   bool load = false;
-
+  void *esp = user ? f ->esp : thread_current () ->user_esp;
   if (!not_present) {
      // printf ("%d %d \n", write, user);
      exit (-1);
   }
-
-  printf ("%p : fault addr\n", fault_addr);
+   // printf ("%p %p\n", fault_addr, f ->esp);
+   // printf ("user? %d\n", user);
   if (not_present && fault_addr > 0x8048000 && is_user_vaddr (fault_addr)) {
      struct spte *spte = get_spte (fault_addr);
-     printf ("%p : spte\n", spte);
      if (spte != NULL) {
         if (spte ->state == EXEC_FILE) {
          load = load_from_exec (spte);
-         printf ("load exec : %d\n", load);
         }
         else if (spte ->state == SWAP_DISK) {
            load = load_from_swap (spte);
-           printf ("load swap : %d\n", load);
         }
-     } else if (fault_addr >= f ->esp - 32 /*STACK_HEURISTIC*/) {
-        // load = stack_growth (fault_addr);
+     } else if (fault_addr >= (esp - 32) && (PHYS_BASE - 0x800000 <= pg_round_down (fault_addr))) {
+        load = stack_growth (fault_addr);
+     } else {
+        // printf ("esp : %p, fault addr : %p\n", f ->esp, pg_round_down (fault_addr));
+        exit (-1);
      }
   }
 

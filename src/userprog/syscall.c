@@ -67,6 +67,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   // hex_dump(f->esp, f->esp, 100, 1);
   int *arg = (int *) palloc_get_page (0);
   uint32_t *sp = f -> esp;
+  thread_current () ->user_esp = f ->esp;
   check_address ((void*) sp);
   switch (*(uint32_t *)(f->esp)) {
     case SYS_HALT: {
@@ -200,7 +201,7 @@ tid_t exec (const char *cmd_line) {
   // printf ("\n");
   tid_t tid = process_execute (cmd_line);
 
-    struct thread *child = get_child_process (tid);
+  struct thread *child = get_child_process (tid);
   struct thread *cur = thread_current ();
   if (child == NULL) {
     return -1;
@@ -262,10 +263,10 @@ int filesize (int fd) {
 }
 
 int read (int fd, void* buffer, unsigned size) {
-  lock_acquire (&filesys_lock);
-  int i;
   check_address (buffer);
   check_address ((const uint8_t*) buffer + size - 1);
+  lock_acquire (&filesys_lock);
+  int i;
   if (fd == 0) {
     for (i = 0; i < size; i ++) {
       if (((char *)buffer)[i] == '\0') {
@@ -281,19 +282,17 @@ int read (int fd, void* buffer, unsigned size) {
 }
 
 int write (int fd, const void *buffer, unsigned size) {
-  lock_acquire (&filesys_lock);
   check_address (buffer);
   check_address ((const uint8_t*) buffer + size - 1);
   if (fd == 1) {
     putbuf(buffer, size);
-    lock_release (&filesys_lock);
     return size;
   } else if (fd > 1) {
+    lock_acquire (&filesys_lock);
     off_t offset = file_write (thread_current () -> fd[fd], buffer, size);
     lock_release (&filesys_lock);
     return offset;
   }
-  lock_release (&filesys_lock);
   return -1;
 }
 
