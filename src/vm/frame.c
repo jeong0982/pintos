@@ -19,11 +19,7 @@ frame_alloc (enum palloc_flags flags, struct spte *spte){
         update_spte_to_swap (fte->spte, idx);
         frame_table_update(fte, spte, thread_current());
     } else {
-        create_fte(frame);
-        lock_acquire(&frame_table_lock);
-        struct fte* fte = list_entry (list_back (&frame_table), struct fte, elem);
-        fte ->spte = spte;
-        lock_release(&frame_table_lock); 
+        create_fte(frame, spte);
     }
     return frame;
 }
@@ -40,15 +36,16 @@ void frame_table_init () {
     lock_init (&frame_table_lock);
 }
 
-void create_fte (void *frame) {
+void create_fte (void *frame, struct spte *spte) {
     struct fte *fte;
-    fte = calloc (1, sizeof *fte);
+    fte = calloc (1, sizeof(struct fte));
     if (fte == NULL)
         return;
     fte ->thread = thread_current ();
     fte ->frame = frame;
+    fte ->spte = spte;
     lock_acquire (&frame_table_lock);
-    list_push_back (&frame_table, &fte ->elem);
+    list_push_front (&frame_table, &fte ->elem);
     lock_release (&frame_table_lock);
     return;
 }

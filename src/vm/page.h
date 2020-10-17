@@ -4,7 +4,7 @@
 #include "threads/thread.h"
 
 enum status {
-    SWAP_DISK, MEMORY, EXEC_FILE
+    SWAP_DISK, MEMORY, EXEC_FILE, STACK
 };
 
 struct spte {
@@ -31,8 +31,8 @@ void init_spt (struct hash*);
 bool spte_less (const struct hash_elem*, const struct hash_elem*, void* UNUSED);
 unsigned spte_hash_func (const struct hash_elem *, void* UNUSED);
 struct spte *get_spte (void *);
-bool create_spte_from_exec (struct file *, int32_t, uint8_t *, uint32_t, uint32_t);
-//void update_spte (struct spte *);
+struct spte* create_spte_for_stack (void *);
+void update_spte_to_swap(struct spte *, block_sector_t);
 static void destroy_spte (struct hash_elem *, void * UNUSED);
 void destroy_spt (struct hash *);
 bool spt_insert_file (struct file *, off_t, uint8_t *, uint32_t, uint32_t, bool);

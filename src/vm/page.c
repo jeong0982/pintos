@@ -29,7 +29,6 @@ get_spte(void *upage) {
   void *new_upage = pg_round_down (upage);
   spte.upage = new_upage;
   e = hash_find (&thread_current()->spt, &spte.elem);
-  printf ("%p    %p\n", e, upage);
   if (e == NULL) {
     return NULL;
   }
@@ -37,22 +36,19 @@ get_spte(void *upage) {
   return hash_entry(e, struct spte, elem);
 }
 
-bool 
-create_spte_from_exec(struct file *file, int32_t ofs, uint8_t *upage, uint32_t read_bytes, uint32_t zero_bytes)
+struct spte* 
+create_spte_for_stack(void *upage)
 {
   struct spte *spte = malloc(sizeof(struct spte));
+  void *new_upage = pg_round_down (upage);
   if (!spte)
     return false;
 
-  spte->upage = upage;  
-  spte->state = EXEC_FILE;
+  spte->upage = new_upage;  
+  spte->state = STACK;
+  spte->writable = true;
 
-  spte->file = file;
-  spte->offset = ofs;
-  spte->read_bytes = read_bytes;
-  spte->zero_bytes = zero_bytes;
-  
-  return (hash_insert(&thread_current()->spt, &spte->elem) == NULL);
+  return spte;
 }
 
 static void destroy_spte (struct hash_elem *e, void *aux UNUSED) {
@@ -78,7 +74,7 @@ bool spt_insert_file (struct file *file, off_t ofs, uint8_t *upage, uint32_t rea
   struct spte *spte;
   struct hash_elem *hash_result;
 
-  spte = calloc (1, sizeof(struct spte));
+  spte = malloc(sizeof(struct spte));
   
   if (spte == NULL)
     return false;

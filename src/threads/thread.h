@@ -119,6 +119,7 @@ struct thread
     struct file* file_running;
 #endif
     struct hash spt;
+    uint8_t *user_esp;
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
