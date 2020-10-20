@@ -120,6 +120,8 @@ struct thread
 #endif
     struct hash spt;
     uint8_t *user_esp;
+    struct list mmap_list;
+
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };

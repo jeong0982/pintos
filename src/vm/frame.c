@@ -69,6 +69,27 @@ void remove_frame (void *frame) {
     lock_release (&frame_table_lock);
 }
 
+void remove_frame_by_spte (struct spte* spte) {
+    struct fte *f;
+    struct list_elem *e;
+    void *frame;
+    lock_acquire (&frame_table_lock);
+    e = list_head (&frame_table);
+    e = list_next (e);
+    while (e != list_tail (&frame_table)) {
+        f = list_entry (e, struct fte, elem);
+        if (f ->spte == spte) {
+            list_remove (e);
+            frame = f ->frame;
+            free (f);
+            break;
+        }
+        e = list_next (e);
+    }
+    lock_release (&frame_table_lock);
+    palloc_free_page (frame);
+}
+
 void frame_free (void *frame) {
     remove_frame (frame);
     palloc_free_page (frame);
@@ -77,4 +98,21 @@ void frame_free (void *frame) {
 void frame_table_update (struct fte* frame, struct spte* spte, struct thread* t) {
     frame ->spte = spte;
     frame ->thread = t;
+}
+
+void* find_frame (struct spte *spte) {
+    struct fte *f;
+    struct list_elem *e;
+
+    lock_acquire (&frame_table_lock);
+    e = list_begin (&frame_table);
+    while (e != list_tail (&frame_table)) {
+        f = list_entry (e, struct fte, elem);
+        if (f ->spte == spte) {
+            break;
+        }
+        e = list_next (e);
+    }
+    lock_release (&frame_table_lock);
+    return f->frame;
 }

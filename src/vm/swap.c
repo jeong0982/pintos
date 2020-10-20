@@ -2,6 +2,7 @@
 #include "threads/vaddr.h"
 #include "threads/synch.h"
 #include <debug.h>
+
 static const size_t SECTORS_PER_PAGE = PGSIZE / BLOCK_SECTOR_SIZE;
 
 static size_t swap_table_size;

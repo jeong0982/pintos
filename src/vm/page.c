@@ -2,6 +2,7 @@
 #include "threads/malloc.h"
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
+#include "vm/swap.h"
 
 void
 init_spt (struct hash* h) {
@@ -47,7 +48,7 @@ create_spte_for_stack(void *upage)
   spte->upage = new_upage;  
   spte->state = STACK;
   spte->writable = true;
-
+  hash_insert (&thread_current () ->spt, &spte ->elem);
   return spte;
 }
 
@@ -70,7 +71,8 @@ void update_spte_to_swap(struct spte *spte, block_sector_t idx) {
   pagedir_clear_page (thread_current () ->pagedir, spte ->upage);
 }
 
-bool spt_insert_file (struct file *file, off_t ofs, uint8_t *upage, uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
+struct spte*
+spt_insert_file (struct file *file, off_t ofs, uint8_t *upage, uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
   struct spte *spte;
   struct hash_elem *hash_result;
 
@@ -90,8 +92,13 @@ bool spt_insert_file (struct file *file, off_t ofs, uint8_t *upage, uint32_t rea
 
   hash_result = hash_insert (&thread_current ()->spt, &spte->elem);
   if (hash_result != NULL)
-    return false;
+    return NULL;
   
-  return true;
+  return spte;
 
+}
+
+bool exist_spte (void* upage) {
+  if (get_spte (upage) == NULL) return false;
+  else return true;
 }

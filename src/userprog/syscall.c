@@ -3,11 +3,14 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "threads/malloc.h"
 #include "userprog/process.h"
 #include <devices/shutdown.h>
 #include <threads/thread.h>
 #include <filesys/filesys.h>
 #include "threads/vaddr.h"
+#include "vm/frame.h"
+
 /*___선언_____________________________________________________________________________*/
 static void syscall_handler (struct intr_frame *);
 
@@ -29,7 +32,8 @@ int write (int, const void*, unsigned);
 void seek (int, unsigned);
 unsigned tell (int);
 void close (int);
-
+mapid_t mmap (int, void*);
+void munmap (mapid_t);
 
 /*_____부가적인 함수들_________________________________________________________________*/
 void check_address (void *addr) {
@@ -162,7 +166,19 @@ syscall_handler (struct intr_frame *f UNUSED)
       palloc_free_page (arg);
       break;
     }
-
+    case SYS_MMAP: {
+      get_argument (sp, arg, 2);
+      mapid_t ret = mmap (arg[0], arg[1]);
+      f ->eax = ret;
+      palloc_free_page (arg);
+      break;
+    }
+    case SYS_MUNMAP: {
+      get_argument (sp, arg, 1);
+      munmap (arg[0]);
+      palloc_free_page (arg);
+      break;
+    }
     default:
       palloc_free_page (arg);
       exit (-1);
@@ -305,5 +321,118 @@ unsigned tell (int fd) {
 }
 
 void close (int fd) {
-  return process_close_file (fd);
+  process_close_file (fd);
+}
+
+mapid_t mmap (int fd, void* addr) {
+  if (fd <= 1) return -1;
+  if (addr == NULL || pg_ofs (addr) != 0) return -1;
+  lock_acquire (&filesys_lock);
+  struct file *file_origin = process_get_file (fd);
+  struct file *map_f = file_reopen (file_origin);
+  if (map_f == NULL) {
+    lock_release (&filesys_lock);
+    return -1;
+  }
+
+  size_t offset;
+  struct mmap_file *mmap_f = (struct mmap_file*) malloc (sizeof (struct mmap_file));
+  list_init (&mmap_f ->spte_list);
+
+  for (offset = 0; offset < file_length (map_f); offset += PGSIZE) {
+    void *vaddr = addr + offset;
+    if (exist_spte (vaddr)) {
+      free (mmap_f);
+      lock_release (&filesys_lock);
+      return -1;
+    }
+  }
+
+  for (offset = 0; offset < file_length (map_f); offset += PGSIZE) {
+    void *vaddr = addr + offset;
+    size_t read_bytes = (offset + PGSIZE < file_length (map_f)? PGSIZE : file_length (map_f) - offset);
+    size_t zero_bytes = PGSIZE - read_bytes;
+    struct spte* spte = spt_insert_file (map_f, offset, vaddr, read_bytes, zero_bytes, true);
+    // printf ("spte create finish %p, %p, %p\n", spte, &mmap_f ->spte_list, &spte ->mmap_elem);
+    list_push_back (&mmap_f ->spte_list, &spte ->mmap_elem);
+  }
+
+  mapid_t mid;
+  if (!list_empty (&thread_current () ->mmap_list)) {
+    mid = list_entry (list_back (&thread_current () ->mmap_list), struct mmap_file, elem) ->mid + 1;
+  } else mid = 0;
+  
+  mmap_f ->mid = mid;
+  mmap_f ->file = map_f;
+
+  list_push_back (&thread_current () ->mmap_list, &mmap_f ->elem);
+
+  lock_release (&filesys_lock);
+  return mid;
+}
+
+bool spte_unmap (struct spte* spte, struct file *f) {
+  struct thread* t = thread_current ();
+  switch (spte ->state) {
+    case MEMORY: {
+      void* frame = find_frame (spte);
+      if (pagedir_is_dirty (t ->pagedir, spte ->upage) 
+          || pagedir_is_dirty (t ->pagedir, frame)) {
+        file_write_at (f, spte ->upage, spte ->read_bytes, spte ->offset);
+      }
+      remove_frame_by_spte (spte);
+      pagedir_clear_page (t ->pagedir, spte ->upage);
+      break;
+    }
+    case SWAP_DISK: {
+      if (pagedir_is_dirty (t ->pagedir, spte ->upage)) {
+        void *temp = palloc_get_page (0);
+        swap_in (spte ->swap_location, temp);
+        file_write_at (f, temp, PGSIZE, spte ->offset);
+        palloc_free_page (temp);
+      } else {
+        swap_table_free (spte ->swap_location);
+      }
+      break;
+    }
+    default:
+      break;
+  }
+  hash_delete (&thread_current () ->spt, &spte ->elem);
+  return true;
+}
+
+void munmap (mapid_t mapping) {
+  struct thread *t = thread_current ();
+  struct list_elem *e;
+  struct mmap_file *mmap_file = NULL;
+
+  if (!list_empty(&t ->mmap_list)) {
+    for (e = list_begin (&t ->mmap_list); e != list_end (&t ->mmap_list); e = list_next (e)) {
+      struct mmap_file *entry = list_entry(e, struct mmap_file, elem);
+      if (entry ->mid == mapping) {
+        mmap_file = entry;
+      }
+    }
+  }
+
+  if (mmap_file == NULL) {
+    return;
+  }
+
+  lock_acquire (&filesys_lock);
+  
+  while (!list_empty (&mmap_file ->spte_list)) {
+    struct list_elem *spte_elem = list_begin (&mmap_file ->spte_list);
+
+    struct spte* spte = list_entry (spte_elem, struct spte, mmap_elem);
+
+    bool success = spte_unmap (spte, mmap_file ->file);
+    list_remove (&spte ->mmap_elem);
+  }
+  list_remove (&mmap_file ->elem);
+  // printf ("hello %p\n", mmap_file);
+  file_close (mmap_file ->file);
+  free (mmap_file);
+  lock_release (&filesys_lock);
 }

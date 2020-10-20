@@ -3,13 +3,15 @@
 #include "filesys/file.h"
 #include "threads/thread.h"
 
+typedef int mapid_t;
+
 enum status {
     SWAP_DISK, MEMORY, EXEC_FILE, STACK
 };
 
 struct spte {
     struct hash_elem elem;
-
+    struct list_elem mmap_elem;
 
     enum status state;
     void *upage;
@@ -27,6 +29,13 @@ struct spte {
     block_sector_t swap_location;
 };
 
+struct mmap_file {
+    mapid_t mid;
+    struct file* file;
+    struct list_elem elem;
+    struct list spte_list;
+};
+
 void init_spt (struct hash*);
 bool spte_less (const struct hash_elem*, const struct hash_elem*, void* UNUSED);
 unsigned spte_hash_func (const struct hash_elem *, void* UNUSED);
@@ -35,4 +44,6 @@ struct spte* create_spte_for_stack (void *);
 void update_spte_to_swap(struct spte *, block_sector_t);
 static void destroy_spte (struct hash_elem *, void * UNUSED);
 void destroy_spt (struct hash *);
-bool spt_insert_file (struct file *, off_t, uint8_t *, uint32_t, uint32_t, bool);
+struct spte* spt_insert_file (struct file *, off_t, uint8_t *, uint32_t, uint32_t, bool);
+bool spte_unmap (struct spte*, struct file*);
+bool exist_spte (void *);
