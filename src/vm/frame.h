@@ -21,3 +21,5 @@ struct fte *find_victim (void);
 void create_fte (void *, struct spte*);
 void frame_table_update (struct fte*, struct spte*, struct thread*);
 void remove_frame (void *);
+void remove_frame_by_spte (struct spte*);
+void* find_frame (struct spte*);

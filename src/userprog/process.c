@@ -179,7 +179,6 @@ struct file *process_get_file (int fd) {
 
 void process_close_file (int fd) {
   struct thread *cur = thread_current ();
-  
   if (!(cur ->fd[fd] == NULL)) {
     file_close (cur ->fd[fd]);
   }
@@ -224,7 +223,12 @@ process_exit (void)
       cur ->fd[i] = NULL;
     }
   }
+  while (!list_empty (&cur ->mmap_list)) {
+    struct list_elem *e = list_begin (&cur ->mmap_list);
+    struct mmap_file *mmap_f = list_entry (e, struct mmap_file, elem);
 
+    munmap (mmap_f ->mid);
+  }
   struct list_elem *e;
   struct list *child_list = &cur ->children;
   while (!list_empty (child_list)) {
@@ -475,7 +479,7 @@ bool load_from_exec (struct spte *spte)
       frame_free(frame);
       return false;
   }
-
+  pagedir_set_dirty (thread_current () ->pagedir, frame, false);
   spte->state = MEMORY;
   return true;
 }
@@ -495,7 +499,7 @@ bool load_from_swap (struct spte *spte)
     }
     swap_in(spte->swap_location, frame);
     spte->state = MEMORY;
-    
+    pagedir_set_dirty (thread_current () ->pagedir, frame, false);
     return true;
 }
 
@@ -507,6 +511,7 @@ bool stack_growth (void* fault_addr)
     frame_free (frame);
     return false;
   }
+  pagedir_set_dirty (thread_current () ->pagedir, frame, false);
 }
 
 /* Checks whether PHDR describes a valid, loadable segment in
@@ -630,7 +635,7 @@ load_segment_lazily (struct file *file, off_t ofs, uint8_t *upage,
          and zero the final PAGE_ZERO_BYTES bytes. */
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
-      if (!spt_insert_file (file, ofs, upage, page_read_bytes, page_zero_bytes, writable)) 
+      if (spt_insert_file (file, ofs, upage, page_read_bytes, page_zero_bytes, writable) == NULL) 
         {
           return false; 
         }
@@ -656,6 +661,7 @@ setup_stack (void **esp)
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL) 
     {
+      struct spte* spte_stack = create_spte_for_stack (((uint8_t *) PHYS_BASE) - PGSIZE);
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
         *esp = PHYS_BASE;
