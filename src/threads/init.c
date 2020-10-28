@@ -129,7 +129,9 @@ main (void)
   locate_block_devices ();
   filesys_init (format_filesys);
 #endif
+#ifdef VM
   swap_table_init ();
+#endif
   printf ("Boot complete.\n");
   
   /* Run actions specified on kernel command line. */
