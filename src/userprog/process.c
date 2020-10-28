@@ -512,6 +512,7 @@ bool stack_growth (void* fault_addr)
     return false;
   }
   pagedir_set_dirty (thread_current () ->pagedir, frame, false);
+  return true;
 }
 
 /* Checks whether PHDR describes a valid, loadable segment in
