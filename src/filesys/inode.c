@@ -5,7 +5,9 @@
 #include <string.h>
 #include "filesys/filesys.h"
 #include "filesys/free-map.h"
+#include "filesys/buffer.h"
 #include "threads/malloc.h"
+#include "threads/synch.h"
 
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
@@ -14,10 +16,11 @@
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
 struct inode_disk
   {
-    block_sector_t start;               /* First data sector. */
     off_t length;                       /* File size in bytes. */
     unsigned magic;                     /* Magic number. */
-    uint32_t unused[125];               /* Not used. */
+    block_sector_t direct_blocks [124];
+    block_sector_t indirect_block;
+    block_sector_t double_indirect_block;
   };
 
 /* Returns the number of sectors to allocate for an inode SIZE
@@ -36,7 +39,7 @@ struct inode
     int open_cnt;                       /* Number of openers. */
     bool removed;                       /* True if deleted, false otherwise. */
     int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
-    struct inode_disk data;             /* Inode content. */
+    struct lock extend_lock;
   };
 
 /* Returns the block device sector that contains byte offset POS
@@ -155,6 +158,12 @@ block_sector_t
 inode_get_inumber (const struct inode *inode)
 {
   return inode->sector;
+}
+
+static bool
+get_disk_inode (const struct inode *inode, struct inode_disk *inode_disk)
+{
+  buffer_cache_read (inode ->sector, inode_disk);
 }
 
 /* Closes INODE and writes it to disk.
