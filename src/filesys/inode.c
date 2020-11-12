@@ -12,16 +12,22 @@
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
 
+#define DIRECT_BLOCKS_COUNT 124
+#define INDIRECT_BLOCK_ENTRIES 128
 /* On-disk inode.
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
 struct inode_disk
   {
     off_t length;                       /* File size in bytes. */
     unsigned magic;                     /* Magic number. */
-    block_sector_t direct_blocks [124];
+    block_sector_t direct_blocks [DIRECT_BLOCKS_COUNT];
     block_sector_t indirect_block;
     block_sector_t double_indirect_block;
   };
+
+struct inode_ibs {
+  block_sector_t blocks[INDIRECT_BLOCK_ENTRIES];
+};
 
 /* Returns the number of sectors to allocate for an inode SIZE
    bytes long. */
@@ -31,6 +37,9 @@ bytes_to_sectors (off_t size)
   return DIV_ROUND_UP (size, BLOCK_SECTOR_SIZE);
 }
 
+static bool inode_allocate (struct inode_disk *d_inode);
+static bool inode_deallocate (struct inode *inode);
+
 /* In-memory inode. */
 struct inode 
   {
@@ -39,8 +48,52 @@ struct inode
     int open_cnt;                       /* Number of openers. */
     bool removed;                       /* True if deleted, false otherwise. */
     int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
-    struct lock extend_lock;
+    struct inode_disk data;             /* Inode content. */
   };
+
+static block_sector_t
+index_to_sector (const struct inode_disk *idisk, off_t index)
+{
+  off_t base = 0;
+  off_t index_limit = DIRECT_BLOCKS_COUNT;
+  block_sector_t ret;
+
+  if (index < index_limit) {
+    return idisk->direct_blocks[index];
+  }
+  base = index_limit;
+
+  index_limit += INDIRECT_BLOCK_ENTRIES;
+  if (index < index_limit) {
+    struct inode_ibs *indirect_idisk;
+    indirect_idisk = calloc(1, sizeof(struct inode_ibs));
+    buffer_cache_read (idisk->indirect_block, indirect_idisk);
+
+    ret = indirect_idisk->blocks[ index - base ];
+    free(indirect_idisk);
+
+    return ret;
+  }
+  base = index_limit;
+
+  index_limit += INDIRECT_BLOCK_ENTRIES * INDIRECT_BLOCK_ENTRIES;
+  if (index < index_limit) {
+    off_t index_first =  (index - base) / INDIRECT_BLOCK_ENTRIES;
+    off_t index_second = (index - base) % INDIRECT_BLOCK_ENTRIES;
+
+    struct inode_ibs *indirect_idisk;
+    indirect_idisk = calloc(1, sizeof(struct inode_ibs));
+
+    buffer_cache_read (idisk->double_indirect_block, indirect_idisk);
+    buffer_cache_read (indirect_idisk->blocks[index_first], indirect_idisk);
+    ret = indirect_idisk->blocks[index_second];
+
+    free(indirect_idisk);
+    return ret;
+  }
+
+  return -1;
+}
 
 /* Returns the block device sector that contains byte offset POS
    within INODE.
@@ -50,10 +103,9 @@ static block_sector_t
 byte_to_sector (const struct inode *inode, off_t pos) 
 {
   ASSERT (inode != NULL);
-  if (pos < inode->data.length)
-    return inode->data.start + pos / BLOCK_SECTOR_SIZE;
-  else
-    return -1;
+  if (0 <= pos && pos < inode->data.length) {
+    off_t index = pos / BLOCK_SECTOR_SIZE;
+    return index_to_sector (&inode->data, index);
 }
 
 /* List of open inodes, so that opening a single inode twice
@@ -158,12 +210,6 @@ block_sector_t
 inode_get_inumber (const struct inode *inode)
 {
   return inode->sector;
-}
-
-static bool
-get_disk_inode (const struct inode *inode, struct inode_disk *inode_disk)
-{
-  buffer_cache_read (inode ->sector, inode_disk);
 }
 
 /* Closes INODE and writes it to disk.
