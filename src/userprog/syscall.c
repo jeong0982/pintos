@@ -34,6 +34,7 @@ unsigned tell (int);
 void close (int);
 mapid_t mmap (int, void*);
 void munmap (mapid_t);
+bool mkdir (const char *);
 
 /*_____부가적인 함수들_________________________________________________________________*/
 void check_address (void *addr) {
@@ -176,6 +177,13 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_MUNMAP: {
       get_argument (sp, arg, 1);
       munmap (arg[0]);
+      palloc_free_page (arg);
+      break;
+    }
+    case SYS_MKDIR: {
+      get_argument (sp, arg, 1);
+      bool ret = mkdir (arg[0]);
+      f ->eax = ret;
       palloc_free_page (arg);
       break;
     }
@@ -435,4 +443,15 @@ void munmap (mapid_t mapping) {
   file_close (mmap_file ->file);
   free (mmap_file);
   lock_release (&filesys_lock);
+}
+
+bool mkdir(const char *filename)
+{
+  bool return_code;
+
+  lock_acquire (&filesys_lock);
+  return_code = filesys_create(filename, 0);
+  lock_release (&filesys_lock);
+
+  return return_code;
 }
