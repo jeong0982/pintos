@@ -113,6 +113,8 @@ byte_to_sector (const struct inode *inode, off_t pos)
   if (0 <= pos && pos < inode->data.length) {
     off_t index = pos / BLOCK_SECTOR_SIZE;
     return index_to_sector (&inode->data, index);
+  } else {
+    return -1;
   }
 }
 
