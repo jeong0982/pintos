@@ -25,9 +25,15 @@ frame_alloc (enum palloc_flags flags, struct spte *spte){
 }
 
 struct fte *find_victim (void) {
-    struct list_elem *evict_elem = list_pop_back (&frame_table);
-    list_push_front (&frame_table, evict_elem);
+    struct list_elem *evict_elem = list_back (&frame_table);
     struct fte* evict = list_entry (evict_elem, struct fte, elem);
+    while (evict ->fixed == true) {
+        evict = list_entry (evict_elem, struct fte, elem);
+        evict_elem = list_prev (evict_elem);
+    }
+    evict = list_entry (evict_elem, struct fte, elem);
+    list_remove (evict_elem);
+    list_push_front (&frame_table, evict_elem);
     return evict;
 }
 
@@ -44,6 +50,7 @@ void create_fte (void *frame, struct spte *spte) {
     fte ->thread = thread_current ();
     fte ->frame = frame;
     fte ->spte = spte;
+    fte ->fixed = true;
     lock_acquire (&frame_table_lock);
     list_push_front (&frame_table, &fte ->elem);
     lock_release (&frame_table_lock);
@@ -115,4 +122,40 @@ void* find_frame (struct spte *spte) {
     }
     lock_release (&frame_table_lock);
     return f->frame;
+}
+
+void frame_unfix (void *frame) {
+    struct fte *f;
+    struct list_elem *e;
+
+    lock_acquire (&frame_table_lock);
+    e = list_head (&frame_table);
+    e = list_next (e);
+    while (e != list_tail (&frame_table)) {
+        f = list_entry (e, struct fte, elem);
+        if (f ->frame == frame) {
+            f ->fixed = false;
+            break;
+        }
+        e = list_next (e);
+    }
+    lock_release (&frame_table_lock);
+}
+
+void frame_fix (void *frame) {
+    struct fte *f;
+    struct list_elem *e;
+
+    lock_acquire (&frame_table_lock);
+    e = list_head (&frame_table);
+    e = list_next (e);
+    while (e != list_tail (&frame_table)) {
+        f = list_entry (e, struct fte, elem);
+        if (f ->frame == frame) {
+            f ->fixed = true;
+            break;
+        }
+        e = list_next (e);
+    }
+    lock_release (&frame_table_lock);
 }

@@ -1,3 +1,4 @@
+#include <string.h>
 #include "filesys/buffer.h"
 #include "threads/synch.h"
 
