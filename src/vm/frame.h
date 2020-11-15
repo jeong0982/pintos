@@ -8,6 +8,7 @@ static struct list frame_table;
 struct lock frame_table_lock;
 
 struct fte {
+    bool fixed;
     void *frame;
     struct spte *spte;
     struct thread *thread;
@@ -23,3 +24,5 @@ void frame_table_update (struct fte*, struct spte*, struct thread*);
 void remove_frame (void *);
 void remove_frame_by_spte (struct spte*);
 void* find_frame (struct spte*);
+void frame_unfix (void*);
+void frame_fix (void*);

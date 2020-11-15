@@ -481,6 +481,7 @@ bool load_from_exec (struct spte *spte)
   }
   pagedir_set_dirty (thread_current () ->pagedir, frame, false);
   spte->state = MEMORY;
+  frame_unfix (frame);
   return true;
 }
 

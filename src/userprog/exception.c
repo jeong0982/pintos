@@ -161,7 +161,8 @@ page_fault (struct intr_frame *f)
      // printf ("%d %d \n", write, user);
      exit (-1);
   }
-   // printf ("user? %d\n", user);
+  // printf ("%p\n", fault_addr);
+  // printf ("user? %d, is user? %d\n", user, is_user_vaddr(fault_addr));
   if (not_present && fault_addr > 0x8048000 && is_user_vaddr (fault_addr)) {
      struct spte *spte = get_spte (fault_addr);
      if (spte != NULL) {

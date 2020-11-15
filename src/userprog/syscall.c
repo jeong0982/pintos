@@ -243,7 +243,10 @@ bool create (const char *file, unsigned initial_size) {
   if (file == NULL) {
     exit (-1);
   }
-  return filesys_create (file, initial_size);
+  lock_acquire (&filesys_lock);
+  bool ret = filesys_create (file, initial_size);
+  lock_release (&filesys_lock);
+  return ret;
 }
 
 bool remove (const char *file) {
@@ -299,7 +302,9 @@ int read (int fd, void* buffer, unsigned size) {
     }
   } else if (fd > 1) {
     struct file *f = process_get_file (fd);
+    preload_pages (buffer, size);
     i = file_read (f, buffer, size);
+    unfix_pages (buffer, size);
   }
   lock_release (&filesys_lock);
   return i;
@@ -313,7 +318,9 @@ int write (int fd, const void *buffer, unsigned size) {
     return size;
   } else if (fd > 1) {
     lock_acquire (&filesys_lock);
+    preload_pages (buffer, size);
     off_t offset = file_write (thread_current () -> fd[fd], buffer, size);
+    preload_pages (buffer, size);
     lock_release (&filesys_lock);
     return offset;
   }
@@ -454,4 +461,38 @@ bool mkdir(const char *filename)
   lock_release (&filesys_lock);
 
   return return_code;
+}
+
+/* utils */
+
+void preload_pages(const void *buffer, size_t size)
+{
+  uint32_t *pagedir = thread_current()->pagedir;
+  void *upage;
+  for(upage = pg_round_down(buffer); upage < buffer + size; upage += PGSIZE)
+  {
+    struct spte *spte = get_spte (upage);
+    if (spte != NULL) {
+      if (spte ->state == EXEC_FILE) {
+        load_from_exec (spte);
+        void* frame = pagedir_get_page (pagedir, upage);
+        frame_fix (frame);
+      } else if (spte ->state == SWAP_DISK) {
+        load_from_swap (spte);
+        void* frame = pagedir_get_page (pagedir, upage);
+        frame_fix (frame);
+      }
+    }
+  }
+}
+
+void unfix_pages(const void *buffer, size_t size)
+{
+  uint32_t *pagedir = thread_current()->pagedir;
+  void *upage;
+  for(upage = pg_round_down(buffer); upage < buffer + size; upage += PGSIZE)
+  {
+    void* frame = pagedir_get_page (pagedir, upage);
+    frame_unfix (frame);
+  }
 }

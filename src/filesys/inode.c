@@ -324,7 +324,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 
   if( byte_to_sector(inode, offset + size - 1) == -1u ) {
     bool success;
-    success = inode_reserve (& inode->data, offset + size);
+    success = inode_reserve (&inode->data, offset + size);
     if (!success) return 0;
     inode->data.length = offset + size;
     buffer_cache_write (inode->sector, &inode->data);
