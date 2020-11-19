@@ -301,7 +301,7 @@ int open (const char *file) {
     return -1;
   }
   struct file *f = filesys_open (file);
-  printf ("%p\n", f);
+
   struct inode *inode = file_get_inode (f);
   if (inode != NULL && file_is_dir (f)) {
     dir_open (inode_reopen (inode));
