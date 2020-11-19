@@ -1,6 +1,9 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
 #include <syscall-nr.h>
+#include "filesys/file.h"
+#include "filesys/directory.h"
+#include "filesys/inode.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/malloc.h"
@@ -35,6 +38,10 @@ void close (int);
 mapid_t mmap (int, void*);
 void munmap (mapid_t);
 bool mkdir (const char *);
+bool isdir (int fd);
+bool chdir (const char *);
+bool readdir (int, char *);
+int inumber (int);
 
 /*_____부가적인 함수들_________________________________________________________________*/
 void check_address (void *addr) {
@@ -187,6 +194,31 @@ syscall_handler (struct intr_frame *f UNUSED)
       palloc_free_page (arg);
       break;
     }
+    case SYS_ISDIR: {
+      get_argument (sp, arg, 1);
+      bool ret = isdir (arg[0]);
+      f ->eax = ret;
+      palloc_free_page (arg);
+      break;
+    }
+    case SYS_CHDIR: {
+      get_argument (sp, arg, 1);
+      f ->eax = chdir (arg[0]);
+      palloc_free_page (arg);
+      break;
+    }
+    case SYS_READDIR: {
+      get_argument (sp, arg, 2);
+      f ->eax = readdir (arg[0], arg[1]);
+      palloc_free_page (arg);
+      break;
+    }
+    case SYS_INUMBER: {
+      get_argument (sp, arg, 1);
+      f ->eax = inumber (arg[0]);
+      palloc_free_page (arg);
+      break;      
+    }
     default:
       palloc_free_page (arg);
       exit (-1);
@@ -268,8 +300,12 @@ int open (const char *file) {
   if (file == NULL) {
     return -1;
   }
-  
   struct file *f = filesys_open (file);
+  printf ("%p\n", f);
+  struct inode *inode = file_get_inode (f);
+  if (inode != NULL && file_is_dir (f)) {
+    dir_open (inode_reopen (inode));
+  }
   if (strcmp (thread_name(), file) == 0) {
     file_deny_write (f);
   }
@@ -317,6 +353,7 @@ int write (int fd, const void *buffer, unsigned size) {
     putbuf(buffer, size);
     return size;
   } else if (fd > 1) {
+    if (file_is_dir (process_get_file (fd))) return -1;
     lock_acquire (&filesys_lock);
     preload_pages (buffer, size);
     off_t offset = file_write (thread_current () -> fd[fd], buffer, size);
@@ -457,10 +494,41 @@ bool mkdir(const char *filename)
   bool return_code;
 
   lock_acquire (&filesys_lock);
-  return_code = filesys_create(filename, 0);
+  return_code = filesys_create_dir(filename);
   lock_release (&filesys_lock);
 
   return return_code;
+}
+
+bool
+isdir (int fd) 
+{
+  struct file *f = process_get_file (fd);
+  return file_is_dir (f);
+}
+
+bool
+chdir (const char *dir)
+{
+  bool ret;
+  lock_acquire (&filesys_lock);
+  ret = filesys_chdir (dir);
+  lock_release (&filesys_lock);
+  return ret;
+}
+
+bool readdir (int fd, char *name) {
+  struct file *f = process_get_file (fd);
+  if (!file_is_dir (f)) {
+    return false;
+  } else {
+    return dir_readdir (file_get_dir (f), name);
+  }
+}
+
+int inumber (int fd) {
+  struct file *f = process_get_file (fd);
+  return file_get_inode (f);
 }
 
 /* utils */
