@@ -121,7 +121,7 @@ struct thread
     struct hash spt;
     uint8_t *user_esp;
     struct list mmap_list;
-
+    struct dir *cwd;
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };

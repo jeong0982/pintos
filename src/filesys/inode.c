@@ -12,7 +12,7 @@
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
 
-#define DIRECT_BLOCKS_COUNT 124
+#define DIRECT_BLOCKS_COUNT 123
 #define INDIRECT_BLOCK_ENTRIES 128
 /* On-disk inode.
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
@@ -20,6 +20,7 @@ struct inode_disk
   {
     off_t length;                       /* File size in bytes. */
     unsigned magic;                     /* Magic number. */
+    bool is_dir;
     block_sector_t direct_blocks [DIRECT_BLOCKS_COUNT];
     block_sector_t indirect_block;
     block_sector_t double_indirect_block;
@@ -135,7 +136,7 @@ inode_init (void)
    Returns true if successful.
    Returns false if memory or disk allocation fails. */
 bool
-inode_create (block_sector_t sector, off_t length)
+inode_create (block_sector_t sector, off_t length, bool is_dir)
 {
   struct inode_disk *disk_inode = NULL;
   bool success = false;
@@ -152,6 +153,7 @@ inode_create (block_sector_t sector, off_t length)
       size_t sectors = bytes_to_sectors (length);
       disk_inode->length = length;
       disk_inode->magic = INODE_MAGIC;
+      disk_inode->is_dir = is_dir;
       if (inode_allocate (disk_inode)) 
         {
           buffer_cache_write (sector, disk_inode);
@@ -547,4 +549,10 @@ bool inode_deallocate (struct inode *inode)
   }
 
   return true;
+}
+
+bool inode_is_dir (const struct inode *inode) {
+  struct inode_disk *ind =  (struct inode_disk*) malloc (sizeof(struct inode_disk));
+  *ind = inode ->data;
+  return ind ->is_dir;
 }

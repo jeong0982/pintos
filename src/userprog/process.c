@@ -237,6 +237,7 @@ process_exit (void)
     process_wait (t ->tid);
   }
   destroy_spt (&cur ->spt);
+  cur ->cwd = NULL;
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   // file_close (cur ->file_running);
