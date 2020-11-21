@@ -124,15 +124,11 @@ dir_lookup (const struct dir *dir, const char *name,
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
 
-  if (strcmp(name, ".") == 0) {
-    *inode = inode_reopen (dir ->inode);
-  } else if (strcmp(name, "..") == 0){
-    inode_read_at (dir ->inode, &e, sizeof e, 0);
+  if (lookup (dir, name, &e, NULL))
     *inode = inode_open (e.inode_sector);
-  } else if (lookup (dir, name, &e, NULL))
-    *inode = inode_open (e.inode_sector);
-  else
+  else {
     *inode = NULL;
+  }
 
   return *inode != NULL;
 }
@@ -144,7 +140,7 @@ dir_lookup (const struct dir *dir, const char *name,
    Fails if NAME is invalid (i.e. too long) or a disk or memory
    error occurs. */
 bool
-dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
+dir_add (struct dir *dir, const char *name, block_sector_t inode_sector, bool is_dir)
 {
   struct dir_entry e;
   off_t ofs;
@@ -197,6 +193,9 @@ dir_remove (struct dir *dir, const char *name)
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
 
+  if (!strcmp (name, ".") || !strcmp (name, ".."))
+    return false;
+
   /* Find directory entry. */
   if (!lookup (dir, name, &e, &ofs))
     goto done;
@@ -227,15 +226,14 @@ bool
 dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
 {
   struct dir_entry e;
-
   while (inode_read_at (dir->inode, &e, sizeof e, dir->pos) == sizeof e) 
     {
       dir->pos += sizeof e;
-      if (e.in_use)
+      if (e.in_use && strcmp (e.name, ".") && strcmp (e.name, ".."))
         {
           strlcpy (name, e.name, NAME_MAX + 1);
           return true;
-        } 
+        }
     }
   return false;
 }

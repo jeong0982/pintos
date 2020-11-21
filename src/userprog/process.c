@@ -165,10 +165,20 @@ start_process (void *file_name_)
 
 int process_add_file (struct file *f) {
   struct thread *cur = thread_current ();
-  int new_file_index = cur->file_no;
-  cur ->fd[new_file_index] = f;
-  cur ->file_no += 1;
-  return new_file_index;
+  int i = 0;
+  bool success = false;
+  for (i = 2; i < 256; i++) {
+    if (cur ->fd[i] == NULL) {
+      cur ->fd[i] = f;
+      success = true;
+      break;
+    }
+  }
+  if (!success) {
+    printf ("fail in process add file\n");
+    return -1;
+  }
+  return i;
 }
 
 struct file *process_get_file (int fd) {
@@ -217,7 +227,7 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
-  for (int i = 0; i < 128; i++) {
+  for (int i = 0; i < 256; i++) {
     if (cur -> fd[i] != NULL) {
       file_close (cur ->fd[i]);
       cur ->fd[i] = NULL;
@@ -237,7 +247,7 @@ process_exit (void)
     process_wait (t ->tid);
   }
   destroy_spt (&cur ->spt);
-  cur ->cwd = NULL;
+  dir_close (cur ->cwd);
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   // file_close (cur ->file_running);

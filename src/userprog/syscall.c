@@ -282,10 +282,14 @@ bool create (const char *file, unsigned initial_size) {
 }
 
 bool remove (const char *file) {
+  bool ret = false;
   if (file == NULL) {
     exit (-1);
   }
-  return filesys_remove (file);
+  lock_acquire (&filesys_lock);
+  ret = filesys_remove (file);
+  lock_release (&filesys_lock);
+  return ret;
 }
 
 int wait (tid_t tid) {
@@ -301,16 +305,10 @@ int open (const char *file) {
     return -1;
   }
   struct file *f = filesys_open (file);
+  if (f == NULL) return -1;
 
-  struct inode *inode = file_get_inode (f);
-  if (inode != NULL && file_is_dir (f)) {
-    dir_open (inode_reopen (inode));
-  }
   if (strcmp (thread_name(), file) == 0) {
     file_deny_write (f);
-  }
-  if (f == NULL) {
-    return -1;
   }
   int status = process_add_file (f);
   return status;
@@ -492,7 +490,6 @@ void munmap (mapid_t mapping) {
 bool mkdir(const char *filename)
 {
   bool return_code;
-
   lock_acquire (&filesys_lock);
   return_code = filesys_create_dir(filename);
   lock_release (&filesys_lock);
@@ -519,11 +516,22 @@ chdir (const char *dir)
 
 bool readdir (int fd, char *name) {
   struct file *f = process_get_file (fd);
-  if (!file_is_dir (f)) {
+  if (f == NULL)
+    exit (-1);
+  struct inode *inode = file_get_inode (f);
+  if (!inode || !inode_is_dir (inode))
     return false;
-  } else {
-    return dir_readdir (file_get_dir (f), name);
-  }
+  struct dir *dir = dir_open (inode);
+  if (!dir)
+    return false;
+  int i;
+  bool result = true;
+  off_t *pos = (off_t *)f + 1;
+  for (i = 0; i <= *pos && result; i++)
+    result = dir_readdir (dir, name);
+  if (i <= *pos == false)
+    (*pos)++;
+  return result;
 }
 
 int inumber (int fd) {

@@ -247,7 +247,7 @@ void remove_child_process (struct thread *cp) {
 
 #ifdef USERPROG
   list_remove (&cp ->child_elem);
-  for (int i = 2; i < 128; i++) {
+  for (int i = 2; i < 256; i++) {
     file_close (cp ->fd[i]);
   }
 #endif
@@ -665,10 +665,9 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
 #ifdef USERPROG
   list_init (&t->children);
-  for (int i = 0; i < 128; i++) {
+  for (int i = 0; i < 256; i++) {
     t->fd[i] = NULL;
   }
-  t->file_no = 2;
 #endif
   list_init (&t->mmap_list);
   old_level = intr_disable ();
