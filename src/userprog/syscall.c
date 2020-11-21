@@ -133,8 +133,8 @@ syscall_handler (struct intr_frame *f UNUSED)
       // if (return_code == -1) {
       // printf ("%d : open\n", return_code);
       // }
-      palloc_free_page (arg);
       f ->eax = return_code;
+      palloc_free_page (arg);
       break;
     }
     case SYS_FILESIZE: {
@@ -301,17 +301,14 @@ int open (const char *file) {
     return -1;
   }
   struct file *f = filesys_open (file);
-
-  struct inode *inode = file_get_inode (f);
-  if (inode != NULL && file_is_dir (f)) {
-    dir_open (inode_reopen (inode));
-  }
-  if (strcmp (thread_name(), file) == 0) {
-    file_deny_write (f);
-  }
   if (f == NULL) {
     return -1;
   }
+
+  if (strcmp (thread_name(), file) == 0) {
+    file_deny_write (f);
+  }
+
   int status = process_add_file (f);
   return status;
 }
@@ -483,7 +480,6 @@ void munmap (mapid_t mapping) {
     list_remove (&spte ->mmap_elem);
   }
   list_remove (&mmap_file ->elem);
-  // printf ("hello %p\n", mmap_file);
   file_close (mmap_file ->file);
   free (mmap_file);
   lock_release (&filesys_lock);
@@ -492,7 +488,6 @@ void munmap (mapid_t mapping) {
 bool mkdir(const char *filename)
 {
   bool return_code;
-
   lock_acquire (&filesys_lock);
   return_code = filesys_create_dir(filename);
   lock_release (&filesys_lock);
@@ -519,11 +514,22 @@ chdir (const char *dir)
 
 bool readdir (int fd, char *name) {
   struct file *f = process_get_file (fd);
-  if (!file_is_dir (f)) {
+  if (f == NULL)
+    exit (-1);
+  struct inode *inode = file_get_inode (f);
+  if (!inode || !inode_is_dir (inode))
     return false;
-  } else {
-    return dir_readdir (file_get_dir (f), name);
-  }
+  struct dir *dir = dir_open (inode);
+  if (!dir)
+    return false;
+  int i;
+  bool result = true;
+  off_t *pos = (off_t *)f + 1;
+  for (i = 0; i <= *pos && result; i++)
+    result = dir_readdir (dir, name);
+  if (i <= *pos == false)
+    (*pos)++;
+  return result;
 }
 
 int inumber (int fd) {

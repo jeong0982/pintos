@@ -422,12 +422,9 @@ static void
 inode_reserve_indirect (block_sector_t* p_entry, size_t num_sectors, int level)
 {
   static char zeros[BLOCK_SECTOR_SIZE];
-
   // only supports 2-level indirect block scheme as of now
-  ASSERT (level <= 2);
 
   if (level == 0) {
-    // base case : allocate a single sector if necessary and put it into the block
     if (*p_entry == 0) {
       free_map_allocate (1, p_entry);
       buffer_cache_write (*p_entry, zeros);
@@ -437,7 +434,6 @@ inode_reserve_indirect (block_sector_t* p_entry, size_t num_sectors, int level)
 
   struct inode_ibs indirect_block;
   if(*p_entry == 0) {
-    // not yet allocated: allocate it, and fill with zero
     free_map_allocate (1, p_entry);
     buffer_cache_write (*p_entry, zeros);
   }
@@ -470,7 +466,6 @@ inode_reserve (struct inode_disk *disk_inode, off_t length)
   size_t num_sectors = bytes_to_sectors(length);
   size_t i, l;
 
-  // (1) direct blocks
   l = min(num_sectors, DIRECT_BLOCKS_COUNT * 1);
   for (i = 0; i < l; ++ i) {
     if (disk_inode->direct_blocks[i] == 0) { // unoccupied
@@ -481,15 +476,13 @@ inode_reserve (struct inode_disk *disk_inode, off_t length)
   num_sectors -= l;
   if(num_sectors == 0) return true;
 
-  // (2) a single indirect block
   l = min(num_sectors, 1 * INDIRECT_BLOCK_ENTRIES);
-  inode_reserve_indirect (& disk_inode->indirect_block, l, 1);
+  inode_reserve_indirect (&disk_inode->indirect_block, l, 1);
   num_sectors -= l;
   if(num_sectors == 0) return true;
 
-  // (3) a single double indirect block
-  l = min(num_sectors, INDIRECT_BLOCK_ENTRIES * INDIRECT_BLOCK_ENTRIES);
-  inode_reserve_indirect (& disk_inode->double_indirect_block, l, 2);
+  l = min(num_sectors, 1 * INDIRECT_BLOCK_ENTRIES * INDIRECT_BLOCK_ENTRIES);
+  inode_reserve_indirect (&disk_inode->double_indirect_block, l, 2);
   num_sectors -= l;
   if(num_sectors == 0) return true;
 
@@ -536,13 +529,13 @@ bool inode_deallocate (struct inode *inode)
   }
   num_sectors -= l;
 
-  l = min(num_sectors, INDIRECT_BLOCK_ENTRIES);
+  l = min(num_sectors, 1 * INDIRECT_BLOCK_ENTRIES);
   if(l > 0) {
     inode_deallocate_indirect (inode->data.indirect_block, l, 1);
     num_sectors -= l;
   }
 
-  l = min(num_sectors, INDIRECT_BLOCK_ENTRIES * INDIRECT_BLOCK_ENTRIES);
+  l = min(num_sectors, 1 * INDIRECT_BLOCK_ENTRIES * INDIRECT_BLOCK_ENTRIES);
   if(l > 0) {
     inode_deallocate_indirect (inode->data.double_indirect_block, l, 2);
     num_sectors -= l;
@@ -553,6 +546,18 @@ bool inode_deallocate (struct inode *inode)
 
 bool inode_is_dir (const struct inode *inode) {
   struct inode_disk *ind =  (struct inode_disk*) malloc (sizeof(struct inode_disk));
+  if (inode ->removed) {
+    free (ind);
+    return false;
+  }
   *ind = inode ->data;
-  return ind ->is_dir;
+  bool is_dir = ind ->is_dir;
+  free (ind);
+  return is_dir;
+}
+
+bool
+inode_is_removed (const struct inode *inode)
+{
+  return inode->removed;
 }

@@ -165,10 +165,20 @@ start_process (void *file_name_)
 
 int process_add_file (struct file *f) {
   struct thread *cur = thread_current ();
-  int new_file_index = cur->file_no;
-  cur ->fd[new_file_index] = f;
-  cur ->file_no += 1;
-  return new_file_index;
+  int i = 0;
+  bool success = false;
+  for (i = 2; i < 256; i++) {
+    if (cur ->fd[i] == NULL) {
+      cur ->fd[i] = f;
+      success = true;
+      break;
+    }
+  }
+  if (!success) {
+    printf ("fail in process add file\n");
+    return -1;
+  }
+  return i;
 }
 
 struct file *process_get_file (int fd) {
@@ -179,7 +189,7 @@ struct file *process_get_file (int fd) {
 
 void process_close_file (int fd) {
   struct thread *cur = thread_current ();
-  if (!(cur ->fd[fd] == NULL)) {
+  if (cur ->fd[fd]) {
     file_close (cur ->fd[fd]);
   }
   cur ->fd[fd] = NULL;
