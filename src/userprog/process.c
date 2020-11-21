@@ -167,7 +167,7 @@ int process_add_file (struct file *f) {
   struct thread *cur = thread_current ();
   int i = 0;
   bool success = false;
-  for (i = 2; i < 256; i++) {
+  for (i = 2; i < 128; i++) {
     if (cur ->fd[i] == NULL) {
       cur ->fd[i] = f;
       success = true;
@@ -227,7 +227,7 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
-  for (int i = 0; i < 256; i++) {
+  for (int i = 0; i < 128; i++) {
     file_close (cur ->fd[i]);
     cur ->fd[i] = NULL;
   }
