@@ -247,8 +247,10 @@ void remove_child_process (struct thread *cp) {
 
 #ifdef USERPROG
   list_remove (&cp ->child_elem);
-  for (int i = 2; i < 128; i++) {
-    file_close (cp ->fd[i]);
+  for (int i = 2; i < 256; i++) {
+    if (!cp ->fd[i]) {
+      file_close (cp ->fd[i]);
+    }
   }
 #endif
 
