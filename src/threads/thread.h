@@ -115,7 +115,6 @@ struct thread
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
     struct file* fd[256];
-    int file_no;                        /* Number of file */
     struct file* file_running;
 #endif
     struct hash spt;

@@ -227,11 +227,9 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
-  for (int i = 0; i < 128; i++) {
-    if (cur -> fd[i] != NULL) {
-      file_close (cur ->fd[i]);
-      cur ->fd[i] = NULL;
-    }
+  for (int i = 0; i < 256; i++) {
+    file_close (cur ->fd[i]);
+    cur ->fd[i] = NULL;
   }
   while (!list_empty (&cur ->mmap_list)) {
     struct list_elem *e = list_begin (&cur ->mmap_list);
@@ -247,7 +245,7 @@ process_exit (void)
     process_wait (t ->tid);
   }
   destroy_spt (&cur ->spt);
-  cur ->cwd = NULL;
+  dir_close (cur ->cwd);
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   // file_close (cur ->file_running);
